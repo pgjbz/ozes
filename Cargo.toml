@@ -1,0 +1,11 @@
+[package]
+name = "ozes"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.20.1", features = ["full"] }
+log = "0.4"
+fast_log = {version = "1.5" , features = ["lz4","zip","gzip"]}
