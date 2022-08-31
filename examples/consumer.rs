@@ -1,4 +1,9 @@
-use std::{net::TcpStream, time::Duration, thread, io::{Write, Read}};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+    thread,
+    time::Duration,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut socket_stream = TcpStream::connect("localhost:7656")?;

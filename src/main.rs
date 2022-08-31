@@ -50,8 +50,7 @@ async fn handle_connection(
     let connection = Arc::new(ozes_connection);
     let message = read_to_string(Arc::clone(&connection)).await?;
 
-    if message.starts_with("SUBSCRIBE: ") {
-        let queue_name = &message[11..];
+    if let Some(queue_name) = message.strip_prefix("SUBSCRIBE: ") {
         let mut queue = message_queue.lock().await;
         log::info!("add listener to queue {}", queue_name);
         match queue.get(queue_name) {
@@ -62,8 +61,7 @@ async fn handle_connection(
                 queue.insert(queue_name.to_owned(), RwLock::new(vec![connection]));
             }
         }
-    } else if message.starts_with("PUBLISH: ") {
-        let queue_name = &message[9..];
+    } else if let Some(queue_name) = message.strip_prefix("PUBLISH: ") {
         loop {
             let msg = read_to_string(Arc::clone(&connection)).await?;
             let mut queue = message_queue.lock().await;
@@ -74,7 +72,7 @@ async fn handle_connection(
                     for sub in subs_read.iter() {
                         let mut stream = sub.stream.write().await;
                         log::info!("send {} to {} queue", msg, queue_name);
-                        if let Err(_) = stream.write_all(msg.as_bytes()).await {
+                        if stream.write_all(msg.as_bytes()).await.is_err() {
                             log::error!("address {} close connection", sub.socket_address);
                             to_remove.push(&sub.socket_address);
                         }
