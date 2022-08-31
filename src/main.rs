@@ -51,45 +51,61 @@ async fn handle_connection(
     let message = read_to_string(Arc::clone(&connection)).await?;
 
     if let Some(queue_name) = message.strip_prefix("SUBSCRIBE: ") {
+        add_listener(message_queue, queue_name, connection).await;
+    } else if let Some(queue_name) = message.strip_prefix("PUBLISH: ") {
+        handle_publisher(connection, message_queue, queue_name).await?
+    }
+    Ok(())
+}
+
+async fn add_listener(
+    message_queue: MessageQueue,
+    queue_name: &str,
+    connection: Arc<OzesConnection>,
+) {
+    let mut queue = message_queue.lock().await;
+    log::info!("add listener to queue {}", queue_name);
+    match queue.get(queue_name) {
+        Some(queue) => {
+            queue.write().await.push(connection);
+        }
+        None => {
+            queue.insert(queue_name.to_owned(), RwLock::new(vec![connection]));
+        }
+    }
+}
+
+async fn handle_publisher(
+    connection: Arc<OzesConnection>,
+    message_queue: MessageQueue,
+    queue_name: &str,
+) -> IOResult {
+    loop {
+        let msg = read_to_string(Arc::clone(&connection)).await?;
         let mut queue = message_queue.lock().await;
-        log::info!("add listener to queue {}", queue_name);
         match queue.get(queue_name) {
-            Some(queue) => {
-                queue.write().await.push(connection);
+            Some(subs) => {
+                let subs_read = subs.read().await;
+                let mut to_remove = Vec::with_capacity(subs_read.len());
+                for sub in subs_read.iter() {
+                    let mut stream = sub.stream.write().await;
+                    log::info!("send {} to {} queue", msg, queue_name);
+                    if stream.write_all(msg.as_bytes()).await.is_err() {
+                        log::error!("address {} close connection", sub.socket_address);
+                        to_remove.push(&sub.socket_address);
+                    }
+                }
+                for r in to_remove {
+                    let mut subs_write = subs.write().await;
+                    subs_write.retain(move |s| s.socket_address.cmp(r) != Ordering::Equal);
+                }
             }
             None => {
-                queue.insert(queue_name.to_owned(), RwLock::new(vec![connection]));
-            }
-        }
-    } else if let Some(queue_name) = message.strip_prefix("PUBLISH: ") {
-        loop {
-            let msg = read_to_string(Arc::clone(&connection)).await?;
-            let mut queue = message_queue.lock().await;
-            match queue.get(queue_name) {
-                Some(subs) => {
-                    let subs_read = subs.read().await;
-                    let mut to_remove = Vec::with_capacity(subs_read.len());
-                    for sub in subs_read.iter() {
-                        let mut stream = sub.stream.write().await;
-                        log::info!("send {} to {} queue", msg, queue_name);
-                        if stream.write_all(msg.as_bytes()).await.is_err() {
-                            log::error!("address {} close connection", sub.socket_address);
-                            to_remove.push(&sub.socket_address);
-                        }
-                    }
-                    for r in to_remove {
-                        let mut subs_write = subs.write().await;
-                        subs_write.retain(move |s| s.socket_address.cmp(r) != Ordering::Equal);
-                    }
-                }
-                None => {
-                    queue.insert(queue_name.to_string(), RwLock::new(vec![]));
-                    continue;
-                }
+                queue.insert(queue_name.to_string(), RwLock::new(vec![]));
+                continue;
             }
         }
     }
-    Ok(())
 }
 
 async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
