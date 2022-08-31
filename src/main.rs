@@ -1,16 +1,14 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{cmp::Ordering, collections::HashMap, net::SocketAddr, sync::Arc};
 
 use fast_log::Config;
 use tokio::{
-    net::{TcpListener, TcpStream}, io::{AsyncReadExt, AsyncWriteExt}, sync::{RwLock, Mutex},
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    sync::{Mutex, RwLock},
 };
 
 type IOResult = std::io::Result<()>;
-type MessageQueue = Arc<Mutex<HashMap<String, Vec<Arc<RwLock<OzesConnection>>>>>>;
+type MessageQueue = Arc<Mutex<HashMap<String, RwLock<Vec<Arc<OzesConnection>>>>>>;
 
 struct OzesConnection {
     stream: RwLock<TcpStream>,
@@ -47,21 +45,23 @@ async fn handle_connection(
     log::info!(
         "handle connection from address {}",
         ozes_connection.socket_address
-    ); 
-    
-    let connection = Arc::new(RwLock::new(ozes_connection));
+    );
+
+    let connection = Arc::new(ozes_connection);
     let message = read_to_string(Arc::clone(&connection)).await?;
 
     if message.starts_with("SUBSCRIBE: ") {
         let queue_name = &message[11..];
         let mut queue = message_queue.lock().await;
         log::info!("add listener to queue {}", queue_name);
-        queue
-            .entry(queue_name.into())
-            .and_modify(|k| {
-                k.push(Arc::clone(&connection));
-            })
-            .or_insert(vec![Arc::clone(&connection)]);
+        match queue.get(queue_name) {
+            Some(queue) => {
+                queue.write().await.push(connection);
+            }
+            None => {
+                queue.insert(queue_name.to_owned(), RwLock::new(vec![connection]));
+            }
+        }
     } else if message.starts_with("PUBLISH: ") {
         let queue_name = &message[9..];
         loop {
@@ -69,21 +69,23 @@ async fn handle_connection(
             let mut queue = message_queue.lock().await;
             match queue.get(queue_name) {
                 Some(subs) => {
-                    let mut to_remove = Vec::with_capacity(subs.len());
-                    for (idx,sub) in subs.iter().enumerate() {
-                        let stream = sub.read().await;
-                        let mut stream = stream.stream.write().await;
+                    let subs_read = subs.read().await;
+                    let mut to_remove = Vec::with_capacity(subs_read.len());
+                    for sub in subs_read.iter() {
+                        let mut stream = sub.stream.write().await;
                         log::info!("send {} to {} queue", msg, queue_name);
                         if let Err(_) = stream.write_all(msg.as_bytes()).await {
-                            log::error!("address {} close connection", sub.read().await.socket_address);
-                            to_remove.push(idx);
+                            log::error!("address {} close connection", sub.socket_address);
+                            to_remove.push(&sub.socket_address);
                         }
                     }
-                   
-                    
-                },
-                None => { 
-                    queue.insert(queue_name.to_string(), vec![]);
+                    for r in to_remove {
+                        let mut subs_write = subs.write().await;
+                        subs_write.retain(move |s| s.socket_address.cmp(r) != Ordering::Equal);
+                    }
+                }
+                None => {
+                    queue.insert(queue_name.to_string(), RwLock::new(vec![]));
                     continue;
                 }
             }
@@ -92,16 +94,15 @@ async fn handle_connection(
     Ok(())
 }
 
-async fn read_to_string(ozes_connection: Arc<RwLock<OzesConnection>>) -> std::io::Result<String> {
-    let stream = ozes_connection.read().await;
-    let mut stream = stream.stream.write().await;
+async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
+    let mut stream = ozes_connection.stream.write().await;
     let mut buffer = [0; 1024];
     let size = match stream.read(&mut buffer).await {
         Ok(size) => {
             if size == 0 {
                 log::info!(
                     "connection from {} is closed",
-                    ozes_connection.read().await.socket_address
+                    ozes_connection.socket_address
                 );
                 return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
             }
@@ -110,7 +111,7 @@ async fn read_to_string(ozes_connection: Arc<RwLock<OzesConnection>>) -> std::io
         Err(error) => {
             log::error!(
                 "error on read message from connection {}: {}",
-                ozes_connection.read().await.socket_address,
+                ozes_connection.socket_address,
                 error
             );
             return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
