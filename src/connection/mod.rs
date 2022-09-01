@@ -7,7 +7,7 @@ pub struct OzesConnection {
     socket_address: SocketAddr,
 }
 
-pub type IOResult = std::io::Result<()>;
+pub type OzesResult = std::io::Result<()>;
 pub type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
 pub type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
 
@@ -19,7 +19,7 @@ impl OzesConnection {
         }
     }
 
-    pub async fn send_message(&self, message: &str) -> IOResult {
+    pub async fn send_message(&self, message: &str) -> OzesResult {
         let mut stream = self.stream.write().await;
         stream.write_all(message.as_bytes()).await?;
         Ok(())
