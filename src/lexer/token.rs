@@ -26,17 +26,21 @@ impl From<&str> for TokenType {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Token<'a> {
+pub struct Token {
     token_type: TokenType,
-    value: Option<&'a str>,
+    value: Option<String>,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(token_type: TokenType, value: Option<&'a str>) -> Self {
+impl Token {
+    pub fn new(token_type: TokenType, value: Option<String>) -> Self {
         Self { token_type, value }
     }
 
     pub fn token_type(&self) -> TokenType {
         self.token_type
+    }
+
+    pub fn value(&self) -> Option<String> {
+        self.value.clone()
     }
 }

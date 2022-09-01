@@ -18,12 +18,12 @@ impl Lexer {
 
         match self.current_char() {
             ('a'..='z') | ('A'..='Z') | '_' => {
-                self.skip_until(|c| !c.is_whitespace() && c != '\0');
+                self.skip_until(|c| !c.is_whitespace() && c != '\0' && c != ';');
                 let end = self.idx;
                 self.consume();
                 let slice = &self.input[start..end];
                 let token_type = TokenType::from(slice);
-                Token::new(token_type, Some(slice))
+                Token::new(token_type, Some(slice.to_owned()))
             }
             '"' => {
                 self.consume();
@@ -31,7 +31,7 @@ impl Lexer {
                 self.skip_until(|c| c != '"');
                 let end = self.idx;
                 self.consume();
-                Token::new(TokenType::Text, Some(&self.input[start..end]))
+                Token::new(TokenType::Text, Some((&self.input[start..end]).to_owned()))
             }
             ';' => {
                 self.consume();
@@ -42,7 +42,7 @@ impl Lexer {
                 let start = self.idx;
                 self.skip_until(|c| !c.is_whitespace() && c != '\0');
                 let end = self.idx;
-                Token::new(TokenType::Illegal, Some(&self.input[start..end]))
+                Token::new(TokenType::Illegal, Some((&self.input[start..end]).to_owned()))
             }
         }
     }
@@ -91,8 +91,7 @@ mod tests {
             assert_eq!(
                 tok.token_type(),
                 expected,
-                "with input {input} expected {:?} but got {:?}",
-                expected,
+                "with input {input} expected {expected:?} but got {:?}",
                 tok.token_type()
             );
         }
@@ -122,8 +121,7 @@ mod tests {
             assert_eq!(
                 expected,
                 tok.token_type(),
-                "expected {:?} but got {:?}",
-                expected,
+                "expected {expected:?} but got {:?}",
                 tok.token_type()
             );
         }
@@ -133,16 +131,16 @@ mod tests {
     fn given_sequence_value_should_be_ok() {
         let input = "subscribe foo with group bar".to_string();
         let expecteds = [
-            Token::new(TokenType::Subscribe, Some("subscribe")),
-            Token::new(TokenType::Name, Some("foo")),
-            Token::new(TokenType::With, Some("with")),
-            Token::new(TokenType::Group, Some("group")),
-            Token::new(TokenType::Name, Some("bar")),
+            Token::new(TokenType::Subscribe, Some("subscribe".to_owned())),
+            Token::new(TokenType::Name, Some("foo".to_owned())),
+            Token::new(TokenType::With, Some("with".to_owned())),
+            Token::new(TokenType::Group, Some("group".to_owned())),
+            Token::new(TokenType::Name, Some("bar".to_owned())),
         ];
         let mut lexer = Lexer::new(input);
         for expected in expecteds {
             let tok = lexer.next_token();
-            assert_eq!(expected, tok, "expected {:?} but got {:?}", expected, tok);
+            assert_eq!(expected, tok, "expected {expected:?} but got {tok:?}");
         }
     }
 }
