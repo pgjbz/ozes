@@ -1,32 +1,12 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use fast_log::Config;
 use ozes::{
+    connection::{IOResult, MessageQueue, OzesConnection, OzesConnections},
     lexer::Lexer,
     parser::{Command, Parser},
 };
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
-    sync::RwLock,
-};
-
-type IOResult = std::io::Result<()>;
-type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
-type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
-
-struct OzesConnection {
-    stream: RwLock<TcpStream>,
-    socket_address: SocketAddr,
-}
-
-impl OzesConnection {
-    async fn send_message(&self, message: &str) -> IOResult {
-        let mut stream = self.stream.write().await;
-        stream.write_all(message.as_bytes()).await?;
-        Ok(())
-    }
-}
+use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
 #[tokio::main]
 async fn main() -> IOResult {
@@ -39,10 +19,7 @@ async fn main() -> IOResult {
             Ok((stream, socket_address)) => {
                 let queue = Arc::clone(&queues);
                 tokio::task::spawn(handle_connection(
-                    OzesConnection {
-                        stream: RwLock::new(stream),
-                        socket_address,
-                    },
+                    OzesConnection::new(RwLock::new(stream), socket_address),
                     queue,
                 ));
             }
@@ -57,7 +34,7 @@ async fn handle_connection(
 ) -> IOResult {
     log::info!(
         "handle connection from address {}",
-        ozes_connection.socket_address
+        ozes_connection.socket_address()
     );
 
     let connection = Arc::new(ozes_connection);
@@ -89,7 +66,7 @@ async fn handle_connection(
         Err(error) => {
             log::error!(
                 "error with connection {}: {error}",
-                connection.socket_address
+                connection.socket_address()
             );
             connection.send_message(&error.to_string()).await?;
             return Ok(());
@@ -117,7 +94,7 @@ async fn add_listener(
     } else {
         log::error!(
             "error to add listener {:?} to queue {queue_name}",
-            connection.socket_address
+            connection.socket_address()
         )
     }
 }
@@ -150,7 +127,7 @@ async fn handle_publisher(
             }
         }
     }
-    return Ok(());
+    Ok(())
 }
 
 async fn process_commands(
@@ -159,7 +136,7 @@ async fn process_commands(
     queue_name: &String,
     publisher: &Arc<OzesConnection>,
 ) -> std::io::Result<()> {
-    Ok(for command in commands {
+    for command in commands {
         match command {
             Command::Message(message) => {
                 process_message_command(subs, message, queue_name, publisher).await?;
@@ -175,7 +152,8 @@ async fn process_commands(
                     .await?
             }
         }
-    })
+    }
+    Ok(())
 }
 
 async fn process_message_command(
@@ -190,25 +168,26 @@ async fn process_message_command(
     publisher.send_message("Ok message").await?;
     for sub in subs_read.iter() {
         if sub.send_message(&message).await.is_err() {
-            log::error!("address {} close connection", sub.socket_address);
-            to_remove.push(&sub.socket_address);
+            log::error!("address {} close connection", sub.socket_address());
+            to_remove.push(sub.socket_address());
         }
     }
-    Ok(for rmv in to_remove {
+    for rmv in to_remove {
         let mut subs_write = subs.write().await;
-        subs_write.retain(move |s| &s.socket_address == rmv);
-    })
+        subs_write.retain(move |s| s.socket_address() == rmv);
+    }
+    Ok(())
 }
 
 async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
-    let mut stream = ozes_connection.stream.write().await;
+    let mut stream = ozes_connection.stream().write().await;
     let mut buffer = [0; 1024];
     let size = match stream.read(&mut buffer).await {
         Ok(size) => {
             if size == 0 {
                 log::info!(
                     "connection from {} is closed",
-                    ozes_connection.socket_address
+                    ozes_connection.socket_address()
                 );
                 return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
             }
@@ -217,7 +196,7 @@ async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result
         Err(error) => {
             log::error!(
                 "error on read message from connection {}: {}",
-                ozes_connection.socket_address,
+                ozes_connection.socket_address(),
                 error
             );
             return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
