@@ -144,6 +144,7 @@ impl MQueue {
             }
             Ok(())
         } else {
+            drop(queues_read);
             self.add_queue(queue_name.to_string()).await;
             Ok(())
         }
