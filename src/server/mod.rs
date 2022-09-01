@@ -1,12 +1,16 @@
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 
 use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
 use crate::{
-    connection::{MessageQueue, OzesConnection, OzesConnections, OzesResult},
+    connection::OzesConnection,
     lexer::Lexer,
     parser::{Command, Parser},
 };
+
+pub type OzesResult = std::io::Result<()>;
+pub type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
+pub type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
 
 pub async fn start_server() -> OzesResult {
     let listener = TcpListener::bind("0.0.0.0:7656").await?;

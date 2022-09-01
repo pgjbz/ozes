@@ -1,5 +1,5 @@
 use fast_log::Config;
-use ozes::{connection::OzesResult, server};
+use ozes::server::{self, OzesResult};
 
 #[tokio::main]
 async fn main() -> OzesResult {

@@ -1,15 +1,13 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::RwLock};
+
+use crate::server::OzesResult;
 
 pub struct OzesConnection {
     stream: RwLock<TcpStream>,
     socket_address: SocketAddr,
 }
-
-pub type OzesResult = std::io::Result<()>;
-pub type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
-pub type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
 
 impl OzesConnection {
     pub fn new(stream: RwLock<TcpStream>, socket_address: SocketAddr) -> Self {
