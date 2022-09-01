@@ -12,7 +12,8 @@ use tokio::{
 };
 
 type IOResult = std::io::Result<()>;
-type MessageQueue = Arc<RwLock<HashMap<String, RwLock<Vec<Arc<OzesConnection>>>>>>;
+type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
+type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
 
 struct OzesConnection {
     stream: RwLock<TcpStream>,
@@ -86,7 +87,10 @@ async fn handle_connection(
             }
         }
         Err(error) => {
-            log::error!("error with connection {}: {error}", connection.socket_address);
+            log::error!(
+                "error with connection {}: {error}",
+                connection.socket_address
+            );
             connection.send_message(&error.to_string()).await?;
             return Ok(());
         }
@@ -111,7 +115,10 @@ async fn add_listener(
             }
         }
     } else {
-        log::error!("error to add listener {:?} to queue {queue_name}", connection.socket_address)
+        log::error!(
+            "error to add listener {:?} to queue {queue_name}",
+            connection.socket_address
+        )
     }
 }
 
@@ -130,39 +137,7 @@ async fn handle_publisher(
                     let queue = message_queue.read().await;
                     match queue.get(&queue_name) {
                         Some(subs) => {
-                            for command in commands {
-                                match command {
-                                    Command::Message(message) => {
-                                        let subs_read = subs.read().await;
-                                        let mut to_remove = Vec::with_capacity(subs_read.len());
-                                        log::info!("send {} to {} queue", message, queue_name);
-                                        connection.send_message("Ok message").await?;
-                                        for sub in subs_read.iter() {
-                                            if sub.send_message(&message).await.is_err() {
-                                                log::error!(
-                                                    "address {} close connection",
-                                                    sub.socket_address
-                                                );
-                                                to_remove.push(&sub.socket_address);
-                                            }
-                                        }
-                                        for rmv in to_remove {
-                                            let mut subs_write = subs.write().await;
-                                            subs_write.retain(move |s| &s.socket_address == rmv);
-                                        }
-                                    }
-                                    Command::Subscriber(_, _) => connection
-                                        .send_message(
-                                            "you cannot subscribe to a queue when you are a publisher",
-                                        )
-                                        .await?,
-                                    Command::Publisher(_) => {
-                                        connection
-                                            .send_message("you cannot change queue to publish message")
-                                            .await?
-                                    }
-                                }
-                            }
+                            process_commands(commands, subs, &queue_name, &connection).await?;
                         }
                         None => {
                             let mut queue = message_queue.write().await;
@@ -175,7 +150,54 @@ async fn handle_publisher(
             }
         }
     }
-    return Ok(())
+    return Ok(());
+}
+
+async fn process_commands(
+    commands: Vec<Command>,
+    subs: &OzesConnections,
+    queue_name: &String,
+    publisher: &Arc<OzesConnection>,
+) -> std::io::Result<()> {
+    Ok(for command in commands {
+        match command {
+            Command::Message(message) => {
+                process_message_command(subs, message, queue_name, publisher).await?;
+            }
+            Command::Subscriber(_, _) => {
+                publisher
+                    .send_message("you cannot subscribe to a queue when you are a publisher")
+                    .await?
+            }
+            Command::Publisher(_) => {
+                publisher
+                    .send_message("you cannot change queue to publish message")
+                    .await?
+            }
+        }
+    })
+}
+
+async fn process_message_command(
+    subs: &OzesConnections,
+    message: String,
+    queue_name: &String,
+    publisher: &Arc<OzesConnection>,
+) -> std::io::Result<()> {
+    let subs_read = subs.read().await;
+    let mut to_remove = Vec::with_capacity(subs_read.len());
+    log::info!("send {} to {} queue", message, queue_name);
+    publisher.send_message("Ok message").await?;
+    for sub in subs_read.iter() {
+        if sub.send_message(&message).await.is_err() {
+            log::error!("address {} close connection", sub.socket_address);
+            to_remove.push(&sub.socket_address);
+        }
+    }
+    Ok(for rmv in to_remove {
+        let mut subs_write = subs.write().await;
+        subs_write.retain(move |s| &s.socket_address == rmv);
+    })
 }
 
 async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
