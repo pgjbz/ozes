@@ -42,7 +42,10 @@ impl Lexer {
                 let start = self.idx;
                 self.skip_until(|c| !c.is_whitespace() && c != '\0');
                 let end = self.idx;
-                Token::new(TokenType::Illegal, Some((&self.input[start..end]).to_owned()))
+                Token::new(
+                    TokenType::Illegal,
+                    Some((&self.input[start..end]).to_owned()),
+                )
             }
         }
     }

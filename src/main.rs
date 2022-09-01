@@ -1,18 +1,30 @@
-use std::{cmp::Ordering, collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use fast_log::Config;
+use ozes::{
+    lexer::Lexer,
+    parser::{Command, Parser},
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
-    sync::{Mutex, RwLock},
+    sync::RwLock,
 };
 
 type IOResult = std::io::Result<()>;
-type MessageQueue = Arc<Mutex<HashMap<String, RwLock<Vec<Arc<OzesConnection>>>>>>;
+type MessageQueue = Arc<RwLock<HashMap<String, RwLock<Vec<Arc<OzesConnection>>>>>>;
 
 struct OzesConnection {
     stream: RwLock<TcpStream>,
     socket_address: SocketAddr,
+}
+
+impl OzesConnection {
+    async fn send_message(&self, message: &str) -> IOResult {
+        let mut stream = self.stream.write().await;
+        stream.write_all(message.as_bytes()).await?;
+        Ok(())
+    }
 }
 
 #[tokio::main]
@@ -49,11 +61,34 @@ async fn handle_connection(
 
     let connection = Arc::new(ozes_connection);
     let message = read_to_string(Arc::clone(&connection)).await?;
-
-    if let Some(queue_name) = message.strip_prefix("SUBSCRIBE: ") {
-        add_listener(message_queue, queue_name, connection).await;
-    } else if let Some(queue_name) = message.strip_prefix("PUBLISH: ") {
-        handle_publisher(connection, message_queue, queue_name).await?
+    let mut parser = Parser::new(Lexer::new(message));
+    match parser.parse_commands() {
+        Ok(commands) => {
+            for command in commands {
+                let connection = Arc::clone(&connection);
+                match command {
+                    Command::Subscriber(queue_name, _) => {
+                        add_listener(Arc::clone(&message_queue), &queue_name, connection).await;
+                    }
+                    Command::Publisher(queue_name) => {
+                        tokio::task::spawn(handle_publisher(
+                            connection,
+                            Arc::clone(&message_queue),
+                            queue_name,
+                        ));
+                    }
+                    Command::Message(_) => {
+                        connection
+                            .send_message("have to be a publisher before send a message")
+                            .await?;
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            connection.send_message(&error.to_string()).await?;
+            return Ok(());
+        }
     }
     Ok(())
 }
@@ -63,7 +98,7 @@ async fn add_listener(
     queue_name: &str,
     connection: Arc<OzesConnection>,
 ) {
-    let mut queue = message_queue.lock().await;
+    let mut queue = message_queue.write().await;
     log::info!("add listener to queue {}", queue_name);
     match queue.get(queue_name) {
         Some(queue) => {
@@ -78,32 +113,58 @@ async fn add_listener(
 async fn handle_publisher(
     connection: Arc<OzesConnection>,
     message_queue: MessageQueue,
-    queue_name: &str,
+    queue_name: String,
 ) -> IOResult {
     loop {
-        let msg = read_to_string(Arc::clone(&connection)).await?;
-        let mut queue = message_queue.lock().await;
-        match queue.get(queue_name) {
-            Some(subs) => {
-                let subs_read = subs.read().await;
-                let mut to_remove = Vec::with_capacity(subs_read.len());
-                for sub in subs_read.iter() {
-                    let mut stream = sub.stream.write().await;
-                    log::info!("send {} to {} queue", msg, queue_name);
-                    if stream.write_all(msg.as_bytes()).await.is_err() {
-                        log::error!("address {} close connection", sub.socket_address);
-                        to_remove.push(&sub.socket_address);
+        let message = read_to_string(Arc::clone(&connection)).await?;
+        let mut parser = Parser::new(Lexer::new(message));
+        let commands = parser.parse_commands();
+        match commands {
+            Ok(commands) => {
+                let queue = message_queue.read().await;
+                match queue.get(&queue_name) {
+                    Some(subs) => {
+                        for command in commands {
+                            match command {
+                                Command::Message(message) => {
+                                    let subs_read = subs.read().await;
+                                    let mut to_remove = Vec::with_capacity(subs_read.len());
+                                    log::info!("send {} to {} queue", message, queue_name);
+                                    for sub in subs_read.iter() {
+                                        if sub.send_message(&message).await.is_err() {
+                                            log::error!(
+                                                "address {} close connection",
+                                                sub.socket_address
+                                            );
+                                            to_remove.push(&sub.socket_address);
+                                        }
+                                    }
+                                    for rmv in to_remove {
+                                        let mut subs_write = subs.write().await;
+                                        subs_write.retain(move |s| &s.socket_address == rmv);
+                                    }
+                                }
+                                Command::Subscriber(_, _) => connection
+                                    .send_message(
+                                        "you cannot subscribe to a queue when you are a publisher",
+                                    )
+                                    .await?,
+                                Command::Publisher(_) => {
+                                    connection
+                                        .send_message("you cannot change queue to publish message")
+                                        .await?
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        let mut queue = message_queue.write().await;
+                        queue.insert(queue_name.clone(), RwLock::new(vec![]));
+                        continue;
                     }
                 }
-                for r in to_remove {
-                    let mut subs_write = subs.write().await;
-                    subs_write.retain(move |s| s.socket_address.cmp(r) != Ordering::Equal);
-                }
             }
-            None => {
-                queue.insert(queue_name.to_string(), RwLock::new(vec![]));
-                continue;
-            }
+            Err(error) => connection.send_message(&error.to_string()).await?,
         }
     }
 }

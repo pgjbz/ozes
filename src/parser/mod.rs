@@ -92,10 +92,10 @@ impl Parser {
             self.consume();
             return Ok(());
         }
-        return Err(ParseError::new(format!(
+        Err(ParseError::new(format!(
             "expected {:?} but got {:?}",
             token_type, next_tok_typen
-        )));
+        )))
     }
 
     fn consume(&mut self) {
@@ -156,7 +156,10 @@ mod tests {
                 "subscribe foo with group bar",
                 Command::Subscriber("foo".into(), "bar".into()),
             ),
-            ("publisher foo; message \"baz\";", Command::Publisher("foo".into())),
+            (
+                "publisher foo; message \"baz\";",
+                Command::Publisher("foo".into()),
+            ),
             ("message \"baz\"", Command::Message("baz".into())),
         ];
         for (input, expected) in cases {
