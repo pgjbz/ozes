@@ -1,4 +1,4 @@
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::Arc};
 
 use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
@@ -8,9 +8,12 @@ use crate::{
     parser::{Command, Parser},
 };
 
+mod message_queue;
 pub type OzesResult = std::io::Result<()>;
-pub type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
-pub type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
+
+pub use message_queue::MessageQueue;
+
+use self::message_queue::OzesConnections;
 
 pub async fn start_server() -> OzesResult {
     let listener = TcpListener::bind("0.0.0.0:7656").await?;

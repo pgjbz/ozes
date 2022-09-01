@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr};
 
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::RwLock};
 
@@ -8,6 +8,7 @@ pub struct OzesConnection {
     stream: RwLock<TcpStream>,
     socket_address: SocketAddr,
 }
+
 
 impl OzesConnection {
     pub fn new(stream: RwLock<TcpStream>, socket_address: SocketAddr) -> Self {
