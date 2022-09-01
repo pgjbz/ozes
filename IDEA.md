@@ -13,3 +13,5 @@ PUBLISHER < queue_name >;
 And with the PUBLISHER just send:
 
 MESSAGE "message here";
+
+The "protocol" is based on "SQL" language
