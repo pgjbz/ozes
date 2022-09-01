@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.20.1", features = ["full"] }
 log = "0.4"
-fast_log = {version = "1.5" , features = ["lz4","zip","gzip"]}
-bytes = "1.2.1"
+fast_log = "1.5" 

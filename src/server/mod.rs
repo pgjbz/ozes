@@ -1,11 +1,11 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
 
 use crate::{
     connection::OzesConnection,
-    lexer::Lexer,
-    parser::{Command, Parser},
+    parser::{self, Command},
+    server::message_queue::MQueue,
 };
 
 mod message_queue;
@@ -13,12 +13,10 @@ pub type OzesResult = std::io::Result<()>;
 
 pub use message_queue::MessageQueue;
 
-use self::message_queue::OzesConnections;
-
 pub async fn start_server() -> OzesResult {
     let listener = TcpListener::bind("0.0.0.0:7656").await?;
     log::info!("start listen on port {}", 7656);
-    let queues = MessageQueue::default();
+    let queues = Arc::new(MQueue::default());
     loop {
         match listener.accept().await {
             Ok((stream, socket_address)) => {
@@ -35,7 +33,7 @@ pub async fn start_server() -> OzesResult {
 
 async fn handle_connection(
     ozes_connection: OzesConnection,
-    message_queue: MessageQueue,
+    message_queue: Arc<MQueue>,
 ) -> OzesResult {
     log::info!(
         "handle connection from address {}",
@@ -44,14 +42,15 @@ async fn handle_connection(
 
     let connection = Arc::new(ozes_connection);
     let message = read_to_string(Arc::clone(&connection)).await?;
-    let mut parser = Parser::new(Lexer::new(message));
-    match parser.parse_commands() {
+    match parser::parse(message) {
         Ok(commands) => {
             for command in commands {
                 let connection = Arc::clone(&connection);
                 match command {
-                    Command::Subscriber(queue_name, _) => {
-                        add_listener(Arc::clone(&message_queue), &queue_name, connection).await;
+                    Command::Subscriber(queue_name, group) => {
+                        message_queue
+                            .add_listener(connection, &queue_name, &group)
+                            .await;
                     }
                     Command::Publisher(queue_name) => {
                         tokio::task::spawn(handle_publisher(
@@ -63,6 +62,11 @@ async fn handle_connection(
                     Command::Message(_) => {
                         connection
                             .send_message("have to be a publisher before send a message")
+                            .await?;
+                    }
+                    Command::Ok => {
+                        connection
+                            .send_message("ok command is able only when client receive a message")
                             .await?;
                     }
                 }
@@ -80,53 +84,26 @@ async fn handle_connection(
     Ok(())
 }
 
-async fn add_listener(
-    message_queue: MessageQueue,
-    queue_name: &str,
-    connection: Arc<OzesConnection>,
-) {
-    let mut queue = message_queue.write().await;
-    log::info!("add listener to queue {queue_name}");
-    if connection.send_message("Ok subscriber").await.is_ok() {
-        match queue.get(queue_name) {
-            Some(queue) => {
-                queue.write().await.push(connection);
-            }
-            None => {
-                queue.insert(queue_name.to_owned(), RwLock::new(vec![connection]));
-            }
-        }
-    } else {
-        log::error!(
-            "error to add listener {:?} to queue {queue_name}",
-            connection.socket_address()
-        )
-    }
-}
-
 async fn handle_publisher(
     connection: Arc<OzesConnection>,
-    message_queue: MessageQueue,
+    message_queue: Arc<MQueue>,
     queue_name: String,
 ) -> OzesResult {
     if connection.send_message("Ok publisher").await.is_ok() {
+        log::info!("handle publisher: {}", connection.socket_address());
         loop {
             let message = read_to_string(Arc::clone(&connection)).await?;
-            let mut parser = Parser::new(Lexer::new(message));
-            let commands = parser.parse_commands();
+            let commands = parser::parse(message);
             match commands {
                 Ok(commands) => {
-                    let queue = message_queue.read().await;
-                    match queue.get(&queue_name) {
-                        Some(subs) => {
-                            process_commands(commands, subs, &queue_name, &connection).await?;
-                        }
-                        None => {
-                            let mut queue = message_queue.write().await;
-                            queue.insert(queue_name.clone(), RwLock::new(vec![]));
-                            continue;
-                        }
-                    }
+                    process_commands(
+                        commands,
+                        queue_name.clone(),
+                        Arc::clone(&connection),
+                        Arc::clone(&message_queue),
+                    )
+                    .await?;
+                    continue;
                 }
                 Err(error) => connection.send_message(&error.to_string()).await?,
             }
@@ -137,14 +114,20 @@ async fn handle_publisher(
 
 async fn process_commands(
     commands: Vec<Command>,
-    subs: &OzesConnections,
-    queue_name: &String,
-    publisher: &Arc<OzesConnection>,
+    queue_name: String,
+    publisher: Arc<OzesConnection>,
+    message_queue: Arc<MQueue>,
 ) -> std::io::Result<()> {
     for command in commands {
         match command {
             Command::Message(message) => {
-                process_message_command(subs, message, queue_name, publisher).await?;
+                process_message_command(
+                    message,
+                    &queue_name,
+                    Arc::clone(&publisher),
+                    Arc::clone(&message_queue),
+                )
+                .await?;
             }
             Command::Subscriber(_, _) => {
                 publisher
@@ -156,31 +139,25 @@ async fn process_commands(
                     .send_message("you cannot change queue to publish message")
                     .await?
             }
+            Command::Ok => {
+                publisher
+                    .send_message("ok command is able only to subscribers when receive message")
+                    .await?
+            }
         }
     }
     Ok(())
 }
 
 async fn process_message_command(
-    subs: &OzesConnections,
     message: String,
-    queue_name: &String,
-    publisher: &Arc<OzesConnection>,
+    queue_name: &str,
+    publisher: Arc<OzesConnection>,
+    message_queue: Arc<MQueue>,
 ) -> std::io::Result<()> {
-    let subs_read = subs.read().await;
-    let mut to_remove = Vec::with_capacity(subs_read.len());
     log::info!("send {} to {} queue", message, queue_name);
     publisher.send_message("Ok message").await?;
-    for sub in subs_read.iter() {
-        if sub.send_message(&message).await.is_err() {
-            log::error!("address {} close connection", sub.socket_address());
-            to_remove.push(sub.socket_address());
-        }
-    }
-    for rmv in to_remove {
-        let mut subs_write = subs.write().await;
-        subs_write.retain(move |s| s.socket_address() == rmv);
-    }
+    message_queue.send_message(&message, queue_name).await?;
     Ok(())
 }
 

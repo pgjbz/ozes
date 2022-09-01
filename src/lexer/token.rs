@@ -1,15 +1,16 @@
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TokenType {
+    Ok,
+    Eof,
     With,
     Name,
+    Text,
     Group,
     Illegal,
     Message,
-    Text,
     Publisher,
     Subscribe,
     Semicolon,
-    Eof,
 }
 
 impl From<&str> for TokenType {
@@ -20,6 +21,7 @@ impl From<&str> for TokenType {
             "publisher" => Self::Publisher,
             "subscribe" => Self::Subscribe,
             "message" => Self::Message,
+            "ok" => Self::Ok,
             _ => Self::Name,
         }
     }

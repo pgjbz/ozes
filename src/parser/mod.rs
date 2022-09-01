@@ -10,16 +10,17 @@ pub enum Command {
     Message(String),
     Publisher(String),
     Subscriber(String, String),
+    Ok,
 }
 
-pub struct Parser {
+struct Parser {
     lexer: Lexer,
     current_tok: Token,
     next_tok: Token,
 }
 
 impl Parser {
-    pub fn new(mut lexer: Lexer) -> Self {
+    fn new(mut lexer: Lexer) -> Self {
         let (current_tok, next_tok) = (lexer.next_token(), lexer.next_token());
         Self {
             lexer,
@@ -51,6 +52,10 @@ impl Parser {
                     let command = self.parse_subscriber()?;
                     commands.push(command);
                 },
+                TokenType::Ok => {
+                    let command = self.parse_ok()?;
+                    commands.push(command);
+                }
                 _ => {
                     return Err(ParseError::new(format!(
                         "miss expression, expression cannot start with {current_token:?}, only start with 'message', 'publisher' or 'subscribe'",
@@ -86,6 +91,12 @@ impl Parser {
         Ok(Command::Subscriber(queue_name, group_name))
     }
 
+    fn parse_ok(&mut self) -> Result<Command, ParseError> {
+        self.expected_token(TokenType::Eof)?;
+        self.consume();
+        Ok(Command::Ok)
+    }
+
     fn expected_token(&mut self, token_type: TokenType) -> Result<(), ParseError> {
         let next_tok_typen = self.next_tok.token_type();
         if next_tok_typen == token_type {
@@ -109,6 +120,12 @@ impl Parser {
     }
 }
 
+#[inline(always)]
+pub fn parse(input: String) -> ParseResult {
+    let mut parser = Parser::new(Lexer::new(input));
+    parser.parse_commands()
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -129,6 +146,8 @@ mod tests {
             ("publisher foo;", Command::Publisher("foo".into())),
             ("message \"baz\"", Command::Message("baz".into())),
             ("message \"baz\";", Command::Message("baz".into())),
+            ("ok", Command::Ok),
+            ("ok;", Command::Ok),
         ];
         for (input, expected) in cases {
             let mut parser = build_parser(input.into());
@@ -154,28 +173,36 @@ mod tests {
         let cases = [
             (
                 "subscribe foo with group bar",
-                Command::Subscriber("foo".into(), "bar".into()),
+                vec![Command::Subscriber("foo".into(), "bar".into())],
             ),
             (
                 "publisher foo; message \"baz\";",
-                Command::Publisher("foo".into()),
+                vec![
+                    Command::Publisher("foo".into()),
+                    Command::Message("baz".into()),
+                ],
             ),
-            ("message \"baz\"", Command::Message("baz".into())),
+            (
+                "message \"baz\";ok;",
+                vec![Command::Message("baz".into()), Command::Ok],
+            ),
         ];
-        for (input, expected) in cases {
+        for (input, expecteds) in cases {
             let mut parser = build_parser(input.into());
             let parsed = parser.parse_commands();
             match parsed {
                 Ok(commands) => {
-                    let command = &commands[0];
-                    assert_eq!(
-                        &expected, command,
-                        "expected {expected:?} but got {command:?}",
-                    );
+                    for (idx, expected) in expecteds.iter().enumerate() {
+                        let command = &commands[idx];
+                        assert_eq!(
+                            expected, command,
+                            "expected {expected:?} but got {command:?}",
+                        );
+                    }
                 }
                 Err(e) => assert!(
                     false,
-                    "fail to parse the command, expected {expected:?}, but got error {e}",
+                    "fail to parse the command, expected {expecteds:?}, but got error {e}",
                 ),
             }
         }
