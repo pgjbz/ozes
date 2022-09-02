@@ -53,23 +53,34 @@ impl Group {
                     let msg = connection.read_message().await;
                     if let Some(msg) = msg {
                         let commands = parser::parse(msg);
-                        let is_ok = commands.map_or_else(
-                            |_| false,
-                            |cmds| cmds.iter().all(|cmd| cmd == &Command::Ok),
-                        );
-                        if is_ok {
-                            self.actual_con += 1;
-                            break;
-                        } else {
-                            self.drop_actual_connection().await;
-                            continue;
+                        match commands {
+                            Ok(cmds) => {
+                                if cmds.len() != 1 {
+                                    if connection.send_message("expected exactly one command\n").await.is_ok() {
+                                        continue;
+                                    } 
+                                    self.drop_actual_connection().await;
+                                }
+                                if cmds[0] != Command::Ok {
+                                    if connection.send_message("expected 'Ok' one command\n").await.is_ok() {
+                                        continue;
+                                    } 
+                                    self.drop_actual_connection().await;
+                                    continue;
+                                }
+                                break;
+                            },
+                            Err(error) => {
+                                if connection.send_message(&error.to_string()).await.is_err() {
+                                    self.drop_actual_connection().await;
+                                }
+                            },
                         }
                     } else {
                         self.drop_actual_connection().await;
                         continue;
                     }
                 } else {
-                    drop(connections);
                     self.drop_actual_connection().await;
                     continue;
                 }
