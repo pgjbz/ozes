@@ -1,8 +1,9 @@
 use std::{
+    env,
     io::{Read, Write},
     net::TcpStream,
     thread,
-    time::Duration, env,
+    time::Duration,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

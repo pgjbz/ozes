@@ -8,7 +8,9 @@ use crate::{
     server::message_queue::MQueue,
 };
 
+mod group;
 mod message_queue;
+
 pub type OzesResult = std::io::Result<()>;
 
 pub async fn start_server(port: u16) -> OzesResult {
