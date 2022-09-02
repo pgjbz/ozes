@@ -1,4 +1,5 @@
 FROM docker.io/rust:1.63.0-buster as builder
+LABEL stage="build"
 WORKDIR /app
 COPY . .
 RUN rustup target add x86_64-unknown-linux-musl; \
