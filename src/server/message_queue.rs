@@ -10,7 +10,6 @@ use crate::parser::{self, Command};
 use super::{OzesConnection, OzesResult};
 
 pub type OzesConnections = RwLock<Vec<Arc<OzesConnection>>>;
-pub type MessageQueue = Arc<RwLock<HashMap<String, OzesConnections>>>;
 
 #[derive(Default)]
 
@@ -77,6 +76,7 @@ impl Group {
                                     connections.remove(actual_con);
                                     continue;
                                 }
+                                self.next_connection();
                                 break;
                             }
                             Err(error) => {
@@ -102,6 +102,10 @@ impl Group {
 
     fn reset_connection(&self) {
         *self.actual_con.lock().unwrap() = 0;
+    }
+
+    fn next_connection(&self) {
+        *self.actual_con.lock().unwrap() += 1;
     }
 }
 
@@ -169,11 +173,14 @@ impl MQueue {
     }
 
     pub async fn send_message(&self, message: &str, queue_name: &str) -> OzesResult {
+        log::info!("checking if {queue_name} exists");
         let queues_read = self.queues.read().await;
         if let Some(queue) = queues_read.get(queue_name) {
-            for group in queue.groups.read().await.iter() {
+            let groups = queue.groups.read().await;
+            log::info!("queue {queue_name} founded, iter over {} groupus", groups.len());
+            for group in groups.iter() {
                 let group_write = group.read().await;
-                group_write.send_message(message).await?
+                group_write.send_message(message.clone()).await?;
             }
             Ok(())
         } else {

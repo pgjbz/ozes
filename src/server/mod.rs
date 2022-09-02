@@ -11,8 +11,6 @@ use crate::{
 mod message_queue;
 pub type OzesResult = std::io::Result<()>;
 
-pub use message_queue::MessageQueue;
-
 pub async fn start_server(port: u16) -> OzesResult {
     let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);

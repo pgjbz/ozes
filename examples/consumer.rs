@@ -2,12 +2,14 @@ use std::{
     io::{Read, Write},
     net::TcpStream,
     thread,
-    time::Duration,
+    time::Duration, env,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let group = env::var("GROUP_NAME").unwrap_or("bar".to_owned());
+    let queue_name = env::var("QUEUE_NAME").unwrap_or("foo".to_owned());
     let mut socket_stream = TcpStream::connect("localhost:7656")?;
-    socket_stream.write_all(b"subscribe foo with group bar")?;
+    socket_stream.write_all(format!("subscribe {queue_name} with group {group}").as_bytes())?;
     loop {
         let mut buffer = [0; 1024];
         let size = socket_stream.read(&mut buffer)?;
