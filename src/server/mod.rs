@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use tokio::{io::AsyncReadExt, net::TcpListener, sync::{RwLock, Mutex}};
+use tokio::{
+    io::AsyncReadExt,
+    net::TcpListener,
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
     connection::OzesConnection,
@@ -48,7 +52,9 @@ async fn handle_connection(
                 let connection = Arc::clone(&connection);
                 match command {
                     Command::Subscriber(queue_name, group) => {
-                        message_queue.lock().await
+                        message_queue
+                            .lock()
+                            .await
                             .add_listener(connection, &queue_name, &group)
                             .await;
                     }
@@ -157,7 +163,11 @@ async fn process_message_command(
 ) -> std::io::Result<()> {
     log::info!("send {} to {} queue", message, queue_name);
     publisher.send_message("Ok message").await?;
-    message_queue.lock().await.send_message(&message, queue_name).await?;
+    message_queue
+        .lock()
+        .await
+        .send_message(&message, queue_name)
+        .await?;
     Ok(())
 }
 

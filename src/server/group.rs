@@ -26,18 +26,17 @@ impl Group {
         &self.name
     }
 
-    pub async fn push_connection(&self, connection: Arc<OzesConnection>) {
-        self.connections.write().await.push(connection);
+    pub async fn push_connection(&mut self, connection: Arc<OzesConnection>) {
+        self.connections.push(connection);
     }
 
-    pub async fn send_message(&self, message: &str) -> OzesResult {
+    pub async fn send_message(&mut self, message: &str) -> OzesResult {
         loop {
-            let mut connections = self.connections.write().await;
-            if connections.is_empty() {
+            if self.connections.is_empty() {
                 break;
             }
             let actual_con = *self.actual_con.lock().unwrap();
-            if let Some(connection) = connections.get(actual_con) {
+            if let Some(connection) = self.connections.get(actual_con) {
                 let connection = Arc::clone(connection);
                 if connection.send_message(message).await.is_ok() {
                     let msg = connection.read_message().await;
@@ -53,7 +52,7 @@ impl Group {
                                     {
                                         continue;
                                     }
-                                    connections.remove(actual_con);
+                                    self.connections.remove(actual_con);
                                 }
                                 if cmds[0] != Command::Ok {
                                     if connection
@@ -63,7 +62,7 @@ impl Group {
                                     {
                                         continue;
                                     }
-                                    connections.remove(actual_con);
+                                    self.connections.remove(actual_con);
                                     continue;
                                 }
                                 self.next_connection();
@@ -71,16 +70,16 @@ impl Group {
                             }
                             Err(error) => {
                                 if connection.send_message(&error.to_string()).await.is_err() {
-                                    connections.remove(actual_con);
+                                    self.connections.remove(actual_con);
                                 }
                             }
                         }
                     } else {
-                        connections.remove(actual_con);
+                        self.connections.remove(actual_con);
                         continue;
                     }
                 } else {
-                    connections.remove(actual_con);
+                    self.connections.remove(actual_con);
                     continue;
                 }
             } else {
