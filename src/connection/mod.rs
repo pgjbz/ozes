@@ -3,18 +3,18 @@ use std::net::SocketAddr;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
-    sync::RwLock,
+    sync::Mutex,
 };
 
 use crate::server::OzesResult;
 
 pub struct OzesConnection {
-    stream: RwLock<TcpStream>,
+    stream: Mutex<TcpStream>,
     socket_address: SocketAddr,
 }
 
 impl OzesConnection {
-    pub fn new(stream: RwLock<TcpStream>, socket_address: SocketAddr) -> Self {
+    pub fn new(stream: Mutex<TcpStream>, socket_address: SocketAddr) -> Self {
         Self {
             stream,
             socket_address,
@@ -22,14 +22,14 @@ impl OzesConnection {
     }
 
     pub async fn send_message(&self, message: &str) -> OzesResult {
-        let mut stream = self.stream.write().await;
+        let mut stream = self.stream.lock().await;
         stream.write_all(message.as_bytes()).await?;
         Ok(())
     }
 
     pub async fn read_message(&self) -> Option<String> {
         let mut buffer = [0; 1024];
-        let mut stream = self.stream.write().await;
+        let mut stream = self.stream.lock().await;
         let size = match stream.read(&mut buffer).await {
             Ok(size) => {
                 if size == 0 {
@@ -51,7 +51,7 @@ impl OzesConnection {
         &self.socket_address
     }
 
-    pub fn stream(&self) -> &RwLock<TcpStream> {
+    pub fn stream(&self) -> &Mutex<TcpStream> {
         &self.stream
     }
 }

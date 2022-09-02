@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::{
     io::AsyncReadExt,
     net::TcpListener,
-    sync::{Mutex, RwLock},
+    sync::Mutex,
 };
 
 use crate::{
@@ -26,7 +26,7 @@ pub async fn start_server(port: u16) -> OzesResult {
             Ok((stream, socket_address)) => {
                 let queue = Arc::clone(&queues);
                 tokio::task::spawn(handle_connection(
-                    OzesConnection::new(RwLock::new(stream), socket_address),
+                    OzesConnection::new(Mutex::new(stream), socket_address),
                     queue,
                 ));
             }
@@ -172,7 +172,7 @@ async fn process_message_command(
 }
 
 async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
-    let mut stream = ozes_connection.stream().write().await;
+    let mut stream = ozes_connection.stream().lock().await;
     let mut buffer = [0; 1024];
     let size = match stream.read(&mut buffer).await {
         Ok(size) => {

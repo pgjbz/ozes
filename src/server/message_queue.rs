@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use tokio::sync::RwLock;
+
+use tokio::sync::Mutex;
 
 use super::{group::Group, OzesConnection, OzesResult};
 
@@ -13,12 +14,12 @@ pub struct MQueue {
 }
 
 struct InnerQueue {
-    groups: RwLock<Vec<Group>>,
+    groups: Mutex<Vec<Group>>,
 }
 
 impl InnerQueue {
     async fn push_group(&self, group: Group) {
-        let mut groups_write = self.groups.write().await;
+        let mut groups_write = self.groups.lock().await;
         groups_write.push(group);
     }
 }
@@ -39,7 +40,7 @@ impl MQueue {
         let mut founded = false;
         if self.queues.contains_key(queue_name) {
             let inner_queue = Arc::clone(self.queues.get(queue_name).unwrap());
-            let mut groups_write = inner_queue.groups.write().await;
+            let mut groups_write = inner_queue.groups.lock().await;
             for group in groups_write.iter_mut() {
                 if group.name() == group_name {
                     group.push_connection(Arc::clone(&connection)).await;
@@ -74,7 +75,7 @@ impl MQueue {
     pub async fn send_message(&mut self, message: &str, queue_name: &str) -> OzesResult {
         log::info!("checking if {queue_name} exists");
         if let Some(queue) = self.queues.get(queue_name) {
-            let mut groups = queue.groups.write().await;
+            let mut groups = queue.groups.lock().await;
             log::info!(
                 "queue {queue_name} founded, iter over {} groupus",
                 groups.len()
