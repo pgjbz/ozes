@@ -89,12 +89,14 @@ impl InnerQueue {
 }
 
 impl MQueue {
+    #[inline(always)]
     pub async fn add_queue(&self, queue_name: String) {
         let mut queues_write = self.queues.write().await;
         let inner_queue = InnerQueue {
             groups: Default::default(),
         };
         queues_write.insert(queue_name, inner_queue);
+        drop(queues_write)
     }
 
     pub async fn add_listener(
@@ -104,9 +106,10 @@ impl MQueue {
         group_name: &str,
     ) {
         log::info!("add listener {} to queeue {queue_name} with group {group_name}", connection.socket_address());
-        let queues_read = self.queues.read().await;
+        
+        let mut queues_write = self.queues.write().await;
         let mut founded = false;
-        if let Some(inner_queue) = queues_read.get(queue_name) {
+        if let Some(inner_queue) = queues_write.get(queue_name) {
             let groups_read = inner_queue.groups.read().await;
             for group in groups_read.iter() {
                 let group_read = group.read().await;
@@ -123,16 +126,19 @@ impl MQueue {
                 groups_write.push(RwLock::new(group))
             }
         } else {
-            let queues_write = self.queues.read().await;
             let group = Group::new(group_name.to_string());
             group.push_connection(connection).await;
-            self.add_queue(queue_name.to_string()).await;
+            let inner_queue = InnerQueue {
+                groups: Default::default(),
+            };
+            queues_write.insert(queue_name.to_string(), inner_queue);
             queues_write
                 .get(queue_name)
                 .unwrap()
                 .push_group(RwLock::new(group))
                 .await;
         }
+        log::info!("listener add to queue {queue_name} with group {group_name}");
     }
 
     pub async fn send_message(&self, message: &str, queue_name: &str) -> OzesResult {
