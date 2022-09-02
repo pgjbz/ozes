@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::{io::AsyncReadExt, net::TcpListener, sync::RwLock};
+use tokio::{io::AsyncReadExt, net::TcpListener, sync::{RwLock, Mutex}};
 
 use crate::{
     connection::OzesConnection,
@@ -16,7 +16,7 @@ pub type OzesResult = std::io::Result<()>;
 pub async fn start_server(port: u16) -> OzesResult {
     let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);
-    let queues = Arc::new(MQueue::default());
+    let queues = Arc::new(Mutex::new(MQueue::default()));
     loop {
         match listener.accept().await {
             Ok((stream, socket_address)) => {
@@ -33,7 +33,7 @@ pub async fn start_server(port: u16) -> OzesResult {
 
 async fn handle_connection(
     ozes_connection: OzesConnection,
-    message_queue: Arc<MQueue>,
+    message_queue: Arc<Mutex<MQueue>>,
 ) -> OzesResult {
     log::info!(
         "handle connection from address {}",
@@ -48,7 +48,7 @@ async fn handle_connection(
                 let connection = Arc::clone(&connection);
                 match command {
                     Command::Subscriber(queue_name, group) => {
-                        message_queue
+                        message_queue.lock().await
                             .add_listener(connection, &queue_name, &group)
                             .await;
                     }
@@ -86,7 +86,7 @@ async fn handle_connection(
 
 async fn handle_publisher(
     connection: Arc<OzesConnection>,
-    message_queue: Arc<MQueue>,
+    message_queue: Arc<Mutex<MQueue>>,
     queue_name: String,
 ) -> OzesResult {
     if connection.send_message("Ok publisher").await.is_ok() {
@@ -116,7 +116,7 @@ async fn process_commands(
     commands: Vec<Command>,
     queue_name: String,
     publisher: Arc<OzesConnection>,
-    message_queue: Arc<MQueue>,
+    message_queue: Arc<Mutex<MQueue>>,
 ) -> std::io::Result<()> {
     for command in commands {
         match command {
@@ -153,11 +153,11 @@ async fn process_message_command(
     message: String,
     queue_name: &str,
     publisher: Arc<OzesConnection>,
-    message_queue: Arc<MQueue>,
+    message_queue: Arc<Mutex<MQueue>>,
 ) -> std::io::Result<()> {
     log::info!("send {} to {} queue", message, queue_name);
     publisher.send_message("Ok message").await?;
-    message_queue.send_message(&message, queue_name).await?;
+    message_queue.lock().await.send_message(&message, queue_name).await?;
     Ok(())
 }
 
