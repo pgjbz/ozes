@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use tokio::sync::RwLock;
 
@@ -18,7 +21,7 @@ pub struct MQueue {
 pub struct Group {
     name: String,
     connections: OzesConnections,
-    actual_con: usize,
+    actual_con: Mutex<usize>,
 }
 
 struct InnerQueue {
@@ -30,25 +33,23 @@ impl Group {
         Self {
             name,
             connections: OzesConnections::default(),
-            actual_con: 0,
+            actual_con: Mutex::new(0),
         }
-    }
-
-    async fn drop_actual_connection(&self) {
-        self.connections.write().await.remove(self.actual_con);
     }
 
     async fn push_connection(&self, connection: Arc<OzesConnection>) {
         self.connections.write().await.push(connection);
     }
 
-    pub async fn send_message(&mut self, message: &str) -> OzesResult {
+    pub async fn send_message(&self, message: &str) -> OzesResult {
         loop {
-            let connections = self.connections.read().await;
+            let mut connections = self.connections.write().await;
             if connections.is_empty() {
                 break;
             }
-            if let Some(connection) = connections.get(self.actual_con) {
+            let actual_con = *self.actual_con.lock().unwrap();
+            if let Some(connection) = connections.get(actual_con) {
+                let connection = Arc::clone(connection);
                 if connection.send_message(message).await.is_ok() {
                     let msg = connection.read_message().await;
                     if let Some(msg) = msg {
@@ -56,39 +57,51 @@ impl Group {
                         match commands {
                             Ok(cmds) => {
                                 if cmds.len() != 1 {
-                                    if connection.send_message("expected exactly one command\n").await.is_ok() {
+                                    if connection
+                                        .send_message("expected exactly one command\n")
+                                        .await
+                                        .is_ok()
+                                    {
                                         continue;
-                                    } 
-                                    self.drop_actual_connection().await;
+                                    }
+                                    connections.remove(actual_con);
                                 }
                                 if cmds[0] != Command::Ok {
-                                    if connection.send_message("expected 'Ok' one command\n").await.is_ok() {
+                                    if connection
+                                        .send_message("expected 'Ok' one command\n")
+                                        .await
+                                        .is_ok()
+                                    {
                                         continue;
-                                    } 
-                                    self.drop_actual_connection().await;
+                                    }
+                                    connections.remove(actual_con);
                                     continue;
                                 }
                                 break;
-                            },
+                            }
                             Err(error) => {
                                 if connection.send_message(&error.to_string()).await.is_err() {
-                                    self.drop_actual_connection().await;
+                                    connections.remove(actual_con);
                                 }
-                            },
+                            }
                         }
                     } else {
-                        self.drop_actual_connection().await;
+                        connections.remove(actual_con);
                         continue;
                     }
                 } else {
-                    self.drop_actual_connection().await;
+                    connections.remove(actual_con);
                     continue;
                 }
             } else {
-                self.actual_con = 0;
+                self.reset_connection();
             }
         }
         Ok(())
+    }
+
+    fn reset_connection(&self) {
+        *self.actual_con.lock().unwrap() = 0;
     }
 }
 
@@ -116,8 +129,11 @@ impl MQueue {
         queue_name: &str,
         group_name: &str,
     ) {
-        log::info!("add listener {} to queeue {queue_name} with group {group_name}", connection.socket_address());
-        
+        log::info!(
+            "add listener {} to queeue {queue_name} with group {group_name}",
+            connection.socket_address()
+        );
+
         let mut queues_write = self.queues.write().await;
         let mut founded = false;
         if let Some(inner_queue) = queues_write.get(queue_name) {
@@ -156,7 +172,7 @@ impl MQueue {
         let queues_read = self.queues.read().await;
         if let Some(queue) = queues_read.get(queue_name) {
             for group in queue.groups.read().await.iter() {
-                let mut group_write = group.write().await;
+                let group_write = group.read().await;
                 group_write.send_message(message).await?
             }
             Ok(())
