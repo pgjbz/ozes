@@ -157,11 +157,14 @@ impl MQueue {
                 groups_write.push(RwLock::new(group))
             }
         } else {
+            log::info!("adding new group {group_name} to queue {queue_name}");
             let group = Group::new(group_name.to_string());
+            log::info!("adding connection to new group {group_name}");
             group.push_connection(connection).await;
             let inner_queue = InnerQueue {
                 groups: Default::default(),
             };
+            log::info!("adding group {group_name} to queue {queue_name}");
             queues_write.insert(queue_name.to_string(), inner_queue);
             queues_write
                 .get(queue_name)
