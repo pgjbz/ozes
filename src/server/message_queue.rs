@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-
 use tokio::sync::Mutex;
 
 use super::{group::Group, OzesConnection, OzesResult};
@@ -60,13 +59,20 @@ impl MQueue {
         log::info!("adding new group {group_name} to queue {queue_name}");
         let mut group = Group::new(group_name.to_string());
         log::info!("adding connection to new group {group_name}");
-        group.push_connection(connection).await;
+        group.push_connection(Arc::clone(&connection)).await;
         let inner_queue = InnerQueue {
             groups: Default::default(),
         };
         log::info!("adding group {group_name} to queue {queue_name}");
         self.queues
             .insert(queue_name.to_string(), Arc::new(inner_queue));
+        if connection.send_message("ok subscribed").await.is_err() {
+            log::error!(
+                "error on confirm subscribe of connection {}",
+                connection.socket_address()
+            );
+            return;
+        }
         self.queues.get(queue_name).unwrap().push_group(group).await;
 
         log::info!("listener add to queue {queue_name} with group {group_name}");
