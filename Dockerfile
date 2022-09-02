@@ -1,12 +1,10 @@
-FROM docker.io/rust:1.63.0-buster as builder
+FROM docker.io/rust:1.63.0-slim as builder
 LABEL stage="build"
 WORKDIR /app
 COPY . .
-RUN rustup target add x86_64-unknown-linux-musl; \
-    apt update && apt install -y musl-tools musl-dev; \
-    update-ca-certificates
 
-RUN cargo build --target x86_64-unknown-linux-musl --release; \
+RUN rustup target add x86_64-unknown-linux-musl && \
+    cargo build --target x86_64-unknown-linux-musl --release && \
     strip /app/target/x86_64-unknown-linux-musl/release/ozes
 
 FROM scratch
