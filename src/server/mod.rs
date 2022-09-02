@@ -13,8 +13,8 @@ pub type OzesResult = std::io::Result<()>;
 
 pub use message_queue::MessageQueue;
 
-pub async fn start_server() -> OzesResult {
-    let listener = TcpListener::bind("0.0.0.0:7656").await?;
+pub async fn start_server(port: u16) -> OzesResult {
+    let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);
     let queues = Arc::new(MQueue::default());
     loop {
