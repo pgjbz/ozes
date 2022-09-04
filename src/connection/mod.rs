@@ -27,6 +27,11 @@ impl OzesConnection {
         Ok(())
     }
 
+    pub async fn send_error_message(&self, message: &str) -> OzesResult {
+        self.send_message(&format!("error \"{message}\"")).await?;
+        Ok(())
+    }
+
     pub async fn read_message(&self) -> Option<String> {
         let mut buffer = [0; 1024];
         let mut stream = self.stream.lock().await;

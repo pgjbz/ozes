@@ -66,12 +66,12 @@ async fn handle_connection(
                     }
                     Command::Message { .. } => {
                         connection
-                            .send_message("have to be a publisher before send a message")
+                            .send_error_message("have to be a publisher before send a message")
                             .await?;
                     }
                     Command::Ok => {
                         connection
-                            .send_message("ok command is able only when client receive a message")
+                            .send_error_message("ok command is able only when client receive a message")
                             .await?;
                     }
                 }
@@ -82,7 +82,7 @@ async fn handle_connection(
                 "error with connection {}: {error}",
                 connection.socket_address()
             );
-            connection.send_message(&error.to_string()).await?;
+            connection.send_error_message(&error.to_string()).await?;
             return Ok(());
         }
     }
@@ -110,7 +110,7 @@ async fn handle_publisher(
                     .await?;
                     continue;
                 }
-                Err(error) => connection.send_message(&error.to_string()).await?,
+                Err(error) => connection.send_error_message(&error.to_string()).await?,
             }
         }
     }
@@ -136,17 +136,17 @@ async fn process_commands(
             }
             Command::Subscriber { .. } => {
                 publisher
-                    .send_message("you cannot subscribe to a queue when you are a publisher")
+                    .send_error_message("you cannot subscribe to a queue when you are a publisher")
                     .await?
             }
             Command::Publisher { .. } => {
                 publisher
-                    .send_message("you cannot change queue to publish message")
+                    .send_error_message("you cannot change queue to publish message")
                     .await?
             }
             Command::Ok => {
                 publisher
-                    .send_message("ok command is able only to subscribers when receive message")
+                    .send_error_message("ok command is able only to subscribers when receive message")
                     .await?
             }
         }
