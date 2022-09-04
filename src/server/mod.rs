@@ -1,10 +1,6 @@
 use std::sync::Arc;
 
-use tokio::{
-    io::AsyncReadExt,
-    net::TcpListener,
-    sync::Mutex,
-};
+use tokio::{io::AsyncReadExt, net::TcpListener, sync::Mutex};
 
 use crate::{
     connection::OzesConnection,
@@ -51,21 +47,24 @@ async fn handle_connection(
             for command in commands {
                 let connection = Arc::clone(&connection);
                 match command {
-                    Command::Subscriber(queue_name, group) => {
+                    Command::Subscriber {
+                        queue_name,
+                        group_name,
+                    } => {
                         message_queue
                             .lock()
                             .await
-                            .add_listener(connection, &queue_name, &group)
+                            .add_listener(connection, &queue_name, &group_name)
                             .await;
                     }
-                    Command::Publisher(queue_name) => {
+                    Command::Publisher { queue_name } => {
                         tokio::task::spawn(handle_publisher(
                             connection,
                             Arc::clone(&message_queue),
                             queue_name,
                         ));
                     }
-                    Command::Message(_) => {
+                    Command::Message { .. } => {
                         connection
                             .send_message("have to be a publisher before send a message")
                             .await?;
@@ -126,7 +125,7 @@ async fn process_commands(
 ) -> std::io::Result<()> {
     for command in commands {
         match command {
-            Command::Message(message) => {
+            Command::Message { message } => {
                 process_message_command(
                     message,
                     &queue_name,
@@ -135,12 +134,12 @@ async fn process_commands(
                 )
                 .await?;
             }
-            Command::Subscriber(_, _) => {
+            Command::Subscriber { .. } => {
                 publisher
                     .send_message("you cannot subscribe to a queue when you are a publisher")
                     .await?
             }
-            Command::Publisher(_) => {
+            Command::Publisher { .. } => {
                 publisher
                     .send_message("you cannot change queue to publish message")
                     .await?

@@ -7,9 +7,16 @@ use self::parse_error::ParseResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
-    Message(String),
-    Publisher(String),
-    Subscriber(String, String),
+    Message {
+        message: String,
+    },
+    Publisher {
+        queue_name: String,
+    },
+    Subscriber {
+        queue_name: String,
+        group_name: String,
+    },
     Ok,
 }
 
@@ -68,16 +75,16 @@ impl Parser {
 
     fn parse_message(&mut self) -> Result<Command, ParseError> {
         self.expected_token(TokenType::Text)?;
-        let message_text = self.current_tok.value().unwrap();
+        let message = self.current_tok.value().unwrap();
         self.consume();
-        Ok(Command::Message(message_text))
+        Ok(Command::Message { message })
     }
 
     fn parse_publisher(&mut self) -> Result<Command, ParseError> {
         self.expected_token(TokenType::Name)?;
         let queue_name = self.current_tok.value().unwrap();
         self.consume();
-        Ok(Command::Publisher(queue_name))
+        Ok(Command::Publisher { queue_name })
     }
 
     fn parse_subscriber(&mut self) -> Result<Command, ParseError> {
@@ -88,7 +95,10 @@ impl Parser {
         self.expected_token(TokenType::Name)?;
         let group_name = self.current_tok.value().unwrap();
         self.consume();
-        Ok(Command::Subscriber(queue_name, group_name))
+        Ok(Command::Subscriber {
+            queue_name,
+            group_name,
+        })
     }
 
     fn parse_ok(&mut self) -> Result<Command, ParseError> {
@@ -136,16 +146,42 @@ mod tests {
         let cases = [
             (
                 "subscribe foo with group bar",
-                Command::Subscriber("foo".into(), "bar".into()),
+                Command::Subscriber {
+                    queue_name: "foo".into(),
+                    group_name: "bar".into(),
+                },
             ),
             (
                 "subscribe foo with group bar;",
-                Command::Subscriber("foo".into(), "bar".into()),
+                Command::Subscriber {
+                    queue_name: "foo".into(),
+                    group_name: "bar".into(),
+                },
             ),
-            ("publisher foo", Command::Publisher("foo".into())),
-            ("publisher foo;", Command::Publisher("foo".into())),
-            ("message \"baz\"", Command::Message("baz".into())),
-            ("message \"baz\";", Command::Message("baz".into())),
+            (
+                "publisher foo",
+                Command::Publisher {
+                    queue_name: "foo".into(),
+                },
+            ),
+            (
+                "publisher foo;",
+                Command::Publisher {
+                    queue_name: "foo".into(),
+                },
+            ),
+            (
+                "message \"baz\"",
+                Command::Message {
+                    message: "baz".into(),
+                },
+            ),
+            (
+                "message \"baz\";",
+                Command::Message {
+                    message: "baz".into(),
+                },
+            ),
             ("ok", Command::Ok),
             ("ok;", Command::Ok),
         ];
@@ -173,18 +209,30 @@ mod tests {
         let cases = [
             (
                 "subscribe foo with group bar",
-                vec![Command::Subscriber("foo".into(), "bar".into())],
+                vec![Command::Subscriber {
+                    queue_name: "foo".into(),
+                    group_name: "bar".into(),
+                }],
             ),
             (
                 "publisher foo; message \"baz\";",
                 vec![
-                    Command::Publisher("foo".into()),
-                    Command::Message("baz".into()),
+                    Command::Publisher {
+                        queue_name: "foo".into(),
+                    },
+                    Command::Message {
+                        message: "baz".into(),
+                    },
                 ],
             ),
             (
                 "message \"baz\";ok;",
-                vec![Command::Message("baz".into()), Command::Ok],
+                vec![
+                    Command::Message {
+                        message: "baz".into(),
+                    },
+                    Command::Ok,
+                ],
             ),
         ];
         for (input, expecteds) in cases {
