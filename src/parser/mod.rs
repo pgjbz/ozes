@@ -65,7 +65,7 @@ impl Parser {
                 }
                 _ => {
                     return Err(ParseError::new(format!(
-                        "miss expression, expression cannot start with {current_token:?}, only start with 'message', 'publisher' or 'subscribe'",
+                        "miss expression, expression cannot start with {current_token}, only start with 'message', 'publisher' or 'subscribe'",
                     )))
                 }
             }

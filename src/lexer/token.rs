@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TokenType {
     Ok,
@@ -24,6 +26,25 @@ impl From<&str> for TokenType {
             "ok" => Self::Ok,
             _ => Self::Name,
         }
+    }
+}
+
+impl Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::With => "with",
+            Self::Group => "group",
+            Self::Publisher => "publisher",
+            Self::Subscribe => "subscribe",
+            Self::Message => "message",
+            Self::Ok => "ok",
+            Self::Name => "any",
+            Self::Eof => "eof",
+            Self::Text => "text",
+            Self::Semicolon => ";",
+            Self::Illegal => "illegal",
+        };
+        write!(f, "{}", name)
     }
 }
 
