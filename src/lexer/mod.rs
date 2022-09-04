@@ -18,7 +18,7 @@ impl Lexer {
 
         match self.current_char() {
             ('a'..='z') | ('A'..='Z') | '_' => {
-                self.skip_until(|c| !c.is_whitespace() && c != '\0' && c != ';');
+                self.skip_until(|c| c.is_alphanumeric() || c == '_');
                 let end = self.idx;
                 self.consume();
                 let slice = &self.input[start..end];
@@ -87,6 +87,9 @@ mod tests {
             (";", TokenType::Semicolon),
             ("123", TokenType::Illegal),
             ("_123", TokenType::Name),
+            ("_ha_do_ken", TokenType::Name),
+            ("4+8", TokenType::Illegal),
+            ("", TokenType::Eof),
         ];
         for (input, expected) in cases {
             let mut lexer = Lexer::new(input.into());
@@ -104,7 +107,7 @@ mod tests {
     fn given_sequence_should_be_tokenize_correctly() {
         let input = "with foo _foo 
         \"bar baz\" publisher 
-        group ; 123 message _123"
+        group ; 123 message _123 4+8"
             .to_string();
         let expecteds = [
             TokenType::With,
@@ -117,6 +120,8 @@ mod tests {
             TokenType::Illegal,
             TokenType::Message,
             TokenType::Name,
+            TokenType::Illegal,
+            TokenType::Eof,
         ];
         let mut lexer = Lexer::new(input);
         for expected in expecteds {
