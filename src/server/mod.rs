@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::{io::AsyncReadExt, net::TcpListener, sync::Mutex};
+use tokio::{net::TcpListener, sync::Mutex};
 
 use crate::{
     connection::OzesConnection,
@@ -41,7 +41,7 @@ async fn handle_connection(
     );
 
     let connection = Arc::new(ozes_connection);
-    let message = read_to_string(Arc::clone(&connection)).await?;
+    let message = connection.read_message().await?;
     match parser::parse(message) {
         Ok(commands) => {
             for command in commands {
@@ -71,7 +71,9 @@ async fn handle_connection(
                     }
                     Command::Ok => {
                         connection
-                            .send_error_message("ok command is able only when client receive a message")
+                            .send_error_message(
+                                "ok command is able only when client receive a message",
+                            )
                             .await?;
                     }
                 }
@@ -97,7 +99,7 @@ async fn handle_publisher(
     if connection.send_message("Ok publisher").await.is_ok() {
         log::info!("handle publisher: {}", connection.socket_address());
         loop {
-            let message = read_to_string(Arc::clone(&connection)).await?;
+            let message = connection.read_message().await?;
             let commands = parser::parse(message);
             match commands {
                 Ok(commands) => {
@@ -146,7 +148,9 @@ async fn process_commands(
             }
             Command::Ok => {
                 publisher
-                    .send_error_message("ok command is able only to subscribers when receive message")
+                    .send_error_message(
+                        "ok command is able only to subscribers when receive message",
+                    )
                     .await?
             }
         }
@@ -168,33 +172,4 @@ async fn process_message_command(
         .send_message(&message, queue_name)
         .await?;
     Ok(())
-}
-
-async fn read_to_string(ozes_connection: Arc<OzesConnection>) -> std::io::Result<String> {
-    let mut stream = ozes_connection.stream().lock().await;
-    let mut buffer = [0; 1024];
-    let size = match stream.read(&mut buffer).await {
-        Ok(size) => {
-            if size == 0 {
-                log::info!(
-                    "connection from {} is closed",
-                    ozes_connection.socket_address()
-                );
-                return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
-            }
-            size
-        }
-        Err(error) => {
-            log::error!(
-                "error on read message from connection {}: {}",
-                ozes_connection.socket_address(),
-                error
-            );
-            return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
-        }
-    };
-    let mut vec = Vec::with_capacity(size);
-    vec.extend_from_slice(&buffer[0..size]);
-    let message = String::from_utf8(vec).unwrap();
-    Ok(message)
 }

@@ -6,7 +6,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::server::OzesResult;
+use crate::{server::OzesResult, BUFFER_SIZE};
 
 pub struct OzesConnection {
     stream: Mutex<TcpStream>,
@@ -32,24 +32,30 @@ impl OzesConnection {
         Ok(())
     }
 
-    pub async fn read_message(&self) -> Option<String> {
-        let mut buffer = [0; 1024];
-        let mut stream = self.stream.lock().await;
+    pub async fn read_message(&self) -> std::io::Result<String> {
+        let mut stream = self.stream().lock().await;
+        let mut buffer = [0; BUFFER_SIZE];
         let size = match stream.read(&mut buffer).await {
             Ok(size) => {
                 if size == 0 {
-                    return None;
+                    log::info!("connection from {} is closed", self.socket_address());
+                    return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
                 }
                 size
             }
-            Err(_) => return None,
+            Err(error) => {
+                log::error!(
+                    "error on read message from connection {}: {}",
+                    self.socket_address(),
+                    error
+                );
+                return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+            }
         };
         let mut vec = Vec::with_capacity(size);
         vec.extend_from_slice(&buffer[0..size]);
-        match String::from_utf8(vec) {
-            Ok(msg) => Some(msg),
-            Err(_) => None,
-        }
+        let message = String::from_utf8(vec).unwrap();
+        Ok(message)
     }
 
     pub fn socket_address(&self) -> &SocketAddr {

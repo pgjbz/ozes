@@ -40,7 +40,7 @@ impl Group {
                 let connection = Arc::clone(connection);
                 if connection.send_message(message).await.is_ok() {
                     let msg = connection.read_message().await;
-                    if let Some(msg) = msg {
+                    if let Ok(msg) = msg {
                         let commands = parser::parse(msg);
                         match commands {
                             Ok(cmds) => {
