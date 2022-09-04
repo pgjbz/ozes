@@ -46,7 +46,7 @@ impl Group {
                             Ok(cmds) => {
                                 if cmds.len() != 1 {
                                     if connection
-                                        .send_message("expected exactly one command\n")
+                                        .send_error_message("expected exactly one command\n")
                                         .await
                                         .is_ok()
                                     {
@@ -56,7 +56,7 @@ impl Group {
                                 }
                                 if cmds[0] != Command::Ok {
                                     if connection
-                                        .send_message("expected 'Ok' one command\n")
+                                        .send_error_message("expected 'Ok' one command\n")
                                         .await
                                         .is_ok()
                                     {
@@ -69,7 +69,7 @@ impl Group {
                                 break;
                             }
                             Err(error) => {
-                                if connection.send_message(&error.to_string()).await.is_err() {
+                                if connection.send_error_message(&error.to_string()).await.is_err() {
                                     self.connections.remove(actual_con);
                                 }
                             }
