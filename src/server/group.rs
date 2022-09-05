@@ -5,7 +5,7 @@ use crate::{
     parser::{self, Command},
 };
 
-use super::{message_queue::OzesConnections, OzesResult};
+use super::{error::OzResult, message_queue::OzesConnections};
 
 pub struct Group {
     name: String,
@@ -35,7 +35,7 @@ impl Group {
         self.connections.push(connection);
     }
 
-    pub async fn send_message(&mut self, message: &str) -> OzesResult {
+    pub async fn send_message(&mut self, message: &str) -> OzResult<()> {
         loop {
             if self.connections.is_empty() {
                 break;
@@ -93,7 +93,7 @@ impl Group {
                         log::error!("error on send message {message} to currently connection {e}");
                         self.pop_current_connection().await;
                         continue;
-                    },
+                    }
                 }
             } else {
                 self.reset_connection();
@@ -109,5 +109,4 @@ impl Group {
     fn next_connection(&self) {
         *self.actual_con.lock().unwrap() += 1;
     }
-
 }

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use super::{group::Group, OzesConnection, OzesResult};
+use super::{group::Group, OzResult, OzesConnection};
 
 pub type OzesConnections = Vec<Arc<OzesConnection>>;
 
@@ -78,7 +78,7 @@ impl MQueue {
         log::info!("listener add to queue {queue_name} with group {group_name}");
     }
 
-    pub async fn send_message(&mut self, message: &str, queue_name: &str) -> OzesResult {
+    pub async fn send_message(&mut self, message: &str, queue_name: &str) -> OzResult<()> {
         log::info!("checking if {queue_name} exists");
         if let Some(queue) = self.queues.get(queue_name) {
             let mut groups = queue.groups.lock().await;
@@ -89,7 +89,6 @@ impl MQueue {
             for group in groups.iter_mut() {
                 group.send_message(message).await?;
             }
-            Ok(())
         } else {
             let inner_queue = InnerQueue {
                 groups: Default::default(),
@@ -97,7 +96,7 @@ impl MQueue {
             log::info!("adding new queue {queue_name}");
             self.queues
                 .insert(queue_name.to_string(), Arc::new(inner_queue));
-            Ok(())
         }
+        Ok(())
     }
 }

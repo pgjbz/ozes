@@ -1,9 +1,10 @@
 use fast_log::Config;
-use ozes::server::{self, OzesResult};
+use ozes::server;
 
 #[tokio::main]
-async fn main() -> OzesResult {
+async fn main() {
     fast_log::init(Config::new().console()).unwrap();
-    server::start_server(7656).await?;
-    Ok(())
+    if let Err(e) = server::start_server(7656).await {
+        log::error!("error on startup server {}", e)
+    }
 }

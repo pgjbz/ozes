@@ -6,7 +6,10 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::{server::OzesResult, BUFFER_SIZE};
+use crate::{
+    server::error::{OzResult, OzesError},
+    BUFFER_SIZE,
+};
 
 pub struct OzesConnection {
     stream: Mutex<TcpStream>,
@@ -21,25 +24,25 @@ impl OzesConnection {
         }
     }
 
-    pub async fn send_message(&self, message: &str) -> OzesResult {
+    pub async fn send_message(&self, message: &str) -> OzResult<()> {
         let mut stream = self.stream.lock().await;
         stream.write_all(message.as_bytes()).await?;
         Ok(())
     }
 
-    pub async fn send_error_message(&self, message: &str) -> OzesResult {
+    pub async fn send_error_message(&self, message: &str) -> OzResult<()> {
         self.send_message(&format!("error \"{message}\"")).await?;
         Ok(())
     }
 
-    pub async fn read_message(&self) -> std::io::Result<String> {
+    pub async fn read_message(&self) -> OzResult<String> {
         let mut stream = self.stream().lock().await;
         let mut buffer = [0; BUFFER_SIZE];
         let size = match stream.read(&mut buffer).await {
             Ok(size) => {
                 if size == 0 {
                     log::info!("connection from {} is closed", self.socket_address());
-                    return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+                    return Err(OzesError::WithouConnection);
                 }
                 size
             }
@@ -49,9 +52,12 @@ impl OzesConnection {
                     self.socket_address(),
                     error
                 );
-                return Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe));
+                return Err(error)?;
             }
         };
+        if size > BUFFER_SIZE {
+            return Err(OzesError::ToLongMessage);
+        }
         let mut vec = Vec::with_capacity(size);
         vec.extend_from_slice(&buffer[0..size]);
         let message = String::from_utf8(vec).unwrap();

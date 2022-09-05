@@ -8,12 +8,13 @@ use crate::{
     server::message_queue::MQueue,
 };
 
+use self::error::OzResult;
+
+pub(crate) mod error;
 mod group;
 mod message_queue;
 
-pub type OzesResult = std::io::Result<()>;
-
-pub async fn start_server(port: u16) -> OzesResult {
+pub async fn start_server(port: u16) -> OzResult<()> {
     let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);
     let queues = Arc::new(Mutex::new(MQueue::default()));
@@ -34,7 +35,7 @@ pub async fn start_server(port: u16) -> OzesResult {
 async fn handle_connection(
     ozes_connection: OzesConnection,
     message_queue: Arc<Mutex<MQueue>>,
-) -> OzesResult {
+) -> OzResult<()> {
     log::info!(
         "handle connection from address {}",
         ozes_connection.socket_address()
@@ -95,7 +96,7 @@ async fn handle_publisher(
     connection: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
     queue_name: String,
-) -> OzesResult {
+) -> OzResult<()> {
     if connection.send_message("Ok publisher").await.is_ok() {
         log::info!("handle publisher: {}", connection.socket_address());
         loop {
@@ -124,7 +125,7 @@ async fn process_commands(
     queue_name: String,
     publisher: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
-) -> std::io::Result<()> {
+) -> OzResult<()> {
     for command in commands {
         match command {
             Command::Message { message } => {
@@ -163,7 +164,7 @@ async fn process_message_command(
     queue_name: &str,
     publisher: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
-) -> std::io::Result<()> {
+) -> OzResult<()> {
     log::info!("send {} to {} queue", message, queue_name);
     publisher.send_message("Ok message").await?;
     message_queue
