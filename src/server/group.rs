@@ -43,53 +43,57 @@ impl Group {
             let actual_con = *self.actual_con.lock().unwrap();
             if let Some(connection) = self.connections.get(actual_con) {
                 let connection = Arc::clone(connection);
-                if connection.send_message(message).await.is_ok() {
-                    let msg = connection.read_message().await;
-                    if let Ok(msg) = msg {
-                        let commands = parser::parse(msg);
-                        match commands {
-                            Ok(cmds) => {
-                                if cmds.len() != 1 {
-                                    if connection
-                                        .send_error_message("expected exactly one command\n")
-                                        .await
-                                        .is_ok()
-                                    {
+                match connection.send_message(message).await {
+                    Ok(_) => {
+                        let msg = connection.read_message().await;
+                        if let Ok(msg) = msg {
+                            let commands = parser::parse(msg);
+                            match commands {
+                                Ok(cmds) => {
+                                    if cmds.len() != 1 {
+                                        if connection
+                                            .send_error_message("expected exactly one command\n")
+                                            .await
+                                            .is_ok()
+                                        {
+                                            continue;
+                                        }
+                                        self.pop_current_connection().await;
+                                    }
+                                    if cmds[0] != Command::Ok {
+                                        if connection
+                                            .send_error_message("expected 'Ok' one command\n")
+                                            .await
+                                            .is_ok()
+                                        {
+                                            continue;
+                                        }
+                                        self.pop_current_connection().await;
                                         continue;
                                     }
-                                    self.pop_current_connection().await;
+                                    self.next_connection();
+                                    break;
                                 }
-                                if cmds[0] != Command::Ok {
+                                Err(error) => {
                                     if connection
-                                        .send_error_message("expected 'Ok' one command\n")
+                                        .send_error_message(&error.to_string())
                                         .await
-                                        .is_ok()
+                                        .is_err()
                                     {
-                                        continue;
+                                        self.pop_current_connection().await;
                                     }
-                                    self.pop_current_connection().await;
-                                    continue;
-                                }
-                                self.next_connection();
-                                break;
-                            }
-                            Err(error) => {
-                                if connection
-                                    .send_error_message(&error.to_string())
-                                    .await
-                                    .is_err()
-                                {
-                                    self.pop_current_connection().await;
                                 }
                             }
+                        } else {
+                            self.pop_current_connection().await;
+                            continue;
                         }
-                    } else {
+                    }
+                    Err(e) => {
+                        log::error!("error on send message {message} to currently connection {e}");
                         self.pop_current_connection().await;
                         continue;
-                    }
-                } else {
-                    self.pop_current_connection().await;
-                    continue;
+                    },
                 }
             } else {
                 self.reset_connection();
@@ -105,4 +109,5 @@ impl Group {
     fn next_connection(&self) {
         *self.actual_con.lock().unwrap() += 1;
     }
+
 }
