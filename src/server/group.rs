@@ -26,6 +26,11 @@ impl Group {
         &self.name
     }
 
+    async fn pop_current_connection(&mut self) {
+        let actual_con = *self.actual_con.lock().unwrap();
+        self.connections.remove(actual_con);
+    }
+
     pub async fn push_connection(&mut self, connection: Arc<OzesConnection>) {
         self.connections.push(connection);
     }
@@ -52,7 +57,7 @@ impl Group {
                                     {
                                         continue;
                                     }
-                                    self.connections.remove(actual_con);
+                                    self.pop_current_connection().await;
                                 }
                                 if cmds[0] != Command::Ok {
                                     if connection
@@ -62,24 +67,28 @@ impl Group {
                                     {
                                         continue;
                                     }
-                                    self.connections.remove(actual_con);
+                                    self.pop_current_connection().await;
                                     continue;
                                 }
                                 self.next_connection();
                                 break;
                             }
                             Err(error) => {
-                                if connection.send_error_message(&error.to_string()).await.is_err() {
-                                    self.connections.remove(actual_con);
+                                if connection
+                                    .send_error_message(&error.to_string())
+                                    .await
+                                    .is_err()
+                                {
+                                    self.pop_current_connection().await;
                                 }
                             }
                         }
                     } else {
-                        self.connections.remove(actual_con);
+                        self.pop_current_connection().await;
                         continue;
                     }
                 } else {
-                    self.connections.remove(actual_con);
+                    self.pop_current_connection().await;
                     continue;
                 }
             } else {
