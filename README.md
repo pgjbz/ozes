@@ -16,3 +16,4 @@ Ozes is a message system... for learning purposes only
     - [ ] Error
     - [ ] Create queue
     - [ ] Create group in queue
+- [ ] Support to send and receive binaries in messages.
