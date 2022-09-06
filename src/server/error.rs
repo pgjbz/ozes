@@ -8,7 +8,7 @@ pub enum OzesError {
     TimeOut,
     WithouConnection,
     ErrorResponse,
-    UnknownError,
+    UnknownError(String),
     ToLongMessage,
     AddrInUse,
     PermissionDenied,
@@ -17,13 +17,13 @@ pub enum OzesError {
 impl Display for OzesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let error = match self {
-            Self::ErrorResponse => "response with error",
-            Self::TimeOut => "to long wait",
-            Self::WithouConnection => "lose connection",
-            Self::UnknownError => "unknown error",
-            Self::ToLongMessage => "to long message",
-            Self::AddrInUse => "address already in use",
-            Self::PermissionDenied => "permission denied",
+            Self::ErrorResponse => "response with error".to_owned(),
+            Self::TimeOut => "to long wait".to_owned(),
+            Self::WithouConnection => "lose connection".to_owned(),
+            Self::ToLongMessage => "to long message".to_owned(),
+            Self::AddrInUse => "address already in use".to_owned(),
+            Self::PermissionDenied => "permission denied".to_owned(),
+            Self::UnknownError(error) => format!("unknown error: {}", error),
         };
         write!(f, "{}", error)
     }
@@ -38,7 +38,7 @@ impl From<IOError> for OzesError {
             ErrorKind::TimedOut => Self::TimeOut,
             ErrorKind::AddrInUse => Self::AddrInUse,
             ErrorKind::PermissionDenied => Self::PermissionDenied,
-            _ => OzesError::UnknownError,
+            _ => OzesError::UnknownError(e.to_string()),
         }
     }
 }
