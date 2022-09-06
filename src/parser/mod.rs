@@ -75,7 +75,7 @@ impl Parser {
     }
 
     fn parse_message(&mut self) -> Result<Command, ParseError> {
-        self.expected_token(TokenType::Text)?;
+        self.expected_token_in(&[TokenType::Text, TokenType::Binary])?;
         let message = self.current_tok.value().unwrap();
         self.consume();
         Ok(Command::Message { message })
@@ -109,14 +109,28 @@ impl Parser {
     }
 
     fn expected_token(&mut self, token_type: TokenType) -> Result<(), ParseError> {
-        let next_tok_typen = self.next_tok.token_type();
-        if next_tok_typen == token_type {
+        let next_tok_type = self.next_tok.token_type();
+        if next_tok_type == token_type {
             self.consume();
             return Ok(());
         }
         Err(ParseError::new(format!(
             "expected {:?} but got {:?}",
-            token_type, next_tok_typen
+            token_type, next_tok_type
+        )))
+    }
+
+    fn expected_token_in(&mut self, tokens_types: &[TokenType]) -> Result<(), ParseError> {
+        let next_tok_typen = self.next_tok.token_type();
+        for token_type in tokens_types {
+            if &next_tok_typen == token_type {
+                self.consume();
+                return Ok(());
+            }
+        }
+        Err(ParseError::new(format!(
+            "expected in {:?} but got {:?}",
+            tokens_types, next_tok_typen
         )))
     }
 
@@ -183,8 +197,14 @@ mod tests {
                     message: "baz".into(),
                 },
             ),
-            ("ok", Command::Ok),
-            ("ok;", Command::Ok),
+            (
+                "message #baz\";",
+                Command::Message {
+                    message: "baz\";".into(),
+                },
+            ),
+            // ("ok", Command::Ok),
+            // ("ok;", Command::Ok),
         ];
         for (input, expected) in cases {
             let mut parser = build_parser(input.into());
@@ -199,7 +219,7 @@ mod tests {
                 }
                 Err(e) => assert!(
                     false,
-                    "fail to parse the command, expected {expected:?}, but got error {e}",
+                    "fail to parse the command, expected {expected:?}, but got error {e} with input {input}",
                 ),
             }
         }

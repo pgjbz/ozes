@@ -45,6 +45,15 @@ impl Lexer {
                 self.consume();
                 Token::new(TokenType::Semicolon, None)
             }
+            b'#' => {
+                self.consume();
+                let token = Token::new(
+                    TokenType::Binary,
+                    Some(Bytes::copy_from_slice(&self.input[self.idx..])),
+                );
+                self.idx = self.input.len();
+                token
+            }
             0 => Token::new(TokenType::Eof, None),
             _ => {
                 let start = self.idx;
@@ -98,6 +107,7 @@ mod tests {
             ("_ha_do_ken", TokenType::Name),
             ("_ha.do_ken", TokenType::Name),
             ("4+8", TokenType::Illegal),
+            ("#4+8", TokenType::Binary),
             ("", TokenType::Eof),
         ];
         for (input, expected) in cases {
