@@ -5,7 +5,10 @@ use crate::{
     parser::{self, Command},
 };
 
-use super::{error::OzResult, message_queue::OzesConnections};
+use super::{
+    error::{OzResult, OzesError},
+    message_queue::OzesConnections,
+};
 
 pub struct Group {
     name: String,
@@ -26,9 +29,16 @@ impl Group {
         &self.name
     }
 
-    async fn pop_current_connection(&mut self) {
-        let actual_con = *self.actual_con.lock().unwrap();
-        self.connections.remove(actual_con);
+    fn actual_con(&self) -> usize {
+        *self.actual_con.lock().unwrap()
+    }
+
+    fn pop_current_connection(&mut self) {
+        let actual_con = self.actual_con();
+        if let Some(connection) = self.connections.get(actual_con) {
+            log::info!("pop connection {}", connection.socket_address());
+            self.connections.remove(actual_con);
+        }
     }
 
     pub async fn push_connection(&mut self, connection: Arc<OzesConnection>) {
@@ -40,58 +50,32 @@ impl Group {
             if self.connections.is_empty() {
                 break;
             }
-            let actual_con = *self.actual_con.lock().unwrap();
-            if let Some(connection) = self.connections.get(actual_con) {
+            if let Some(connection) = self.connections.get(self.actual_con()) {
                 let connection = Arc::clone(connection);
                 match connection.send_message(message).await {
-                    Ok(_) => {
-                        let msg = connection.read_message().await;
-                        if let Ok(msg) = msg {
-                            let commands = parser::parse(msg);
-                            match commands {
-                                Ok(cmds) => {
-                                    if cmds.len() != 1 {
-                                        if connection
-                                            .send_error_message("expected exactly one command\n")
-                                            .await
-                                            .is_ok()
-                                        {
-                                            continue;
-                                        }
-                                        self.pop_current_connection().await;
-                                    }
-                                    if cmds[0] != Command::Ok {
-                                        if connection
-                                            .send_error_message("expected 'Ok' one command\n")
-                                            .await
-                                            .is_ok()
-                                        {
-                                            continue;
-                                        }
-                                        self.pop_current_connection().await;
-                                        continue;
-                                    }
-                                    self.next_connection();
-                                    break;
-                                }
-                                Err(error) => {
-                                    if connection
-                                        .send_error_message(&error.to_string())
-                                        .await
-                                        .is_err()
-                                    {
-                                        self.pop_current_connection().await;
-                                    }
-                                }
-                            }
-                        } else {
-                            self.pop_current_connection().await;
+                    Ok(_) => match self.process_client_return(connection).await {
+                        Err(error) if error.is_error(OzesError::WithouConnection) => {
+                            self.pop_current_connection();
                             continue;
                         }
-                    }
+                        Err(error) if error.is_error(OzesError::UnknownError(String::new())) => {
+                            //TODO: catch unknown error and handle correctly
+                            log::info!("unknow error: {} retry", error);
+                            continue;
+                        }
+                        Err(err) => {
+                            //TODO: fix generic error catcher
+                            log::info!("error {:?} retry", err);
+                            continue;
+                        }
+                        Ok(_) => {
+                            self.next_connection();
+                            break;
+                        }
+                    },
                     Err(e) => {
                         log::error!("error on send message {message} to currently connection {e}");
-                        self.pop_current_connection().await;
+                        self.pop_current_connection();
                         continue;
                     }
                 }
@@ -108,5 +92,32 @@ impl Group {
 
     fn next_connection(&self) {
         *self.actual_con.lock().unwrap() += 1;
+    }
+
+    async fn process_client_return(&self, connection: Arc<OzesConnection>) -> OzResult<()> {
+        let msg = connection.read_message().await;
+        if let Ok(msg) = msg {
+            let commands = parser::parse(msg);
+            match commands {
+                Ok(cmds) => {
+                    if cmds.len() != 1 {
+                        connection
+                            .send_error_message("expected exactly one command\n")
+                            .await?;
+                    } else if cmds[0] != Command::Ok {
+                        connection
+                            .send_error_message("expected 'Ok' one command\n")
+                            .await?
+                    }
+                    Ok(())
+                }
+                Err(error) => {
+                    println!("parse error: {}", error);
+                    connection.send_error_message(&error.to_string()).await
+                }
+            }
+        } else {
+            Err(OzesError::WithouConnection)
+        }
     }
 }

@@ -14,6 +14,12 @@ pub enum OzesError {
     PermissionDenied,
 }
 
+impl OzesError {
+    pub fn is_error(&self, error: OzesError) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(&error)
+    }
+}
+
 impl Display for OzesError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let error = match self {

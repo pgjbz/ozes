@@ -31,7 +31,7 @@ impl MQueue {
         group_name: &str,
     ) {
         log::info!(
-            "add listener {} to queeue {queue_name} with group {group_name}",
+            "add listener {} to queue {queue_name} with group {group_name}",
             connection.socket_address()
         );
 
@@ -44,15 +44,22 @@ impl MQueue {
                 if group.name() == group_name {
                     group.push_connection(Arc::clone(&connection)).await;
                     founded = true;
+                    log::debug!("finish to add consumer to existent group");
                     break;
                 }
             }
             if !founded {
-                //let mut groups_write = inner_queue.groups.write().await;
                 let mut group = Group::new(group_name.to_string());
-                group.push_connection(connection).await;
-                groups_write.push(group)
+                group.push_connection(Arc::clone(&connection)).await;
+                groups_write.push(group);
             }
+            if connection.send_message("ok subscribed").await.is_err() {
+                log::error!(
+                    "error on confirm subscribe of connection {}",
+                    connection.socket_address()
+                );
+            }
+            log::debug!("finish to add consumer to existent grou in queue {queue_name}");
             return;
         }
 
@@ -66,6 +73,7 @@ impl MQueue {
         log::info!("adding group {group_name} to queue {queue_name}");
         self.queues
             .insert(queue_name.to_string(), Arc::new(inner_queue));
+
         if connection.send_message("ok subscribed").await.is_err() {
             log::error!(
                 "error on confirm subscribe of connection {}",

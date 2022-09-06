@@ -27,8 +27,7 @@ impl OzesConnection {
     }
 
     pub async fn send_error_message(&self, message: &str) -> OzResult<()> {
-        self.send_message(&format!("error \"{message}\"")).await?;
-        Ok(())
+        self.send_message(&format!("error \"{message}\"")).await
     }
 
     pub async fn read_message(&self) -> OzResult<String> {
