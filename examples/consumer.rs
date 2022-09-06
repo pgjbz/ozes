@@ -21,6 +21,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let message = String::from_utf8(vec).unwrap();
         println!("{}", message);
         socket_stream.write_all(b"ok")?;
-        thread::sleep(Duration::from_secs(1));
     }
 }

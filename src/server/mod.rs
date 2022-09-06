@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use tokio::{net::TcpListener, sync::Mutex};
+use tokio::{
+    net::TcpListener,
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
     connection::OzesConnection,
@@ -23,7 +26,7 @@ pub async fn start_server(port: u16) -> OzResult<()> {
             Ok((stream, socket_address)) => {
                 let queue = Arc::clone(&queues);
                 tokio::task::spawn(handle_connection(
-                    OzesConnection::new(Mutex::new(stream), socket_address),
+                    OzesConnection::new(RwLock::new(stream), socket_address),
                     queue,
                 ));
             }

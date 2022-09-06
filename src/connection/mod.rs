@@ -1,10 +1,6 @@
 use std::net::SocketAddr;
 
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    sync::Mutex,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream, sync::RwLock};
 
 use crate::{
     server::error::{OzResult, OzesError},
@@ -12,12 +8,12 @@ use crate::{
 };
 
 pub struct OzesConnection {
-    stream: Mutex<TcpStream>,
+    stream: RwLock<TcpStream>,
     socket_address: SocketAddr,
 }
 
 impl OzesConnection {
-    pub fn new(stream: Mutex<TcpStream>, socket_address: SocketAddr) -> Self {
+    pub fn new(stream: RwLock<TcpStream>, socket_address: SocketAddr) -> Self {
         Self {
             stream,
             socket_address,
@@ -25,7 +21,7 @@ impl OzesConnection {
     }
 
     pub async fn send_message(&self, message: &str) -> OzResult<()> {
-        let mut stream = self.stream.lock().await;
+        let mut stream = self.stream.write().await;
         stream.write_all(message.as_bytes()).await?;
         Ok(())
     }
@@ -36,23 +32,30 @@ impl OzesConnection {
     }
 
     pub async fn read_message(&self) -> OzResult<String> {
-        let mut stream = self.stream().lock().await;
+        let stream = self.stream.read().await;
         let mut buffer = [0; BUFFER_SIZE];
-        let size = match stream.read(&mut buffer).await {
-            Ok(size) => {
-                if size == 0 {
-                    log::info!("connection from {} is closed", self.socket_address());
-                    return Err(OzesError::WithouConnection);
+
+        let size = loop {
+            stream.readable().await?;
+            match stream.try_read(&mut buffer) {
+                Ok(size) => {
+                    if size == 0 {
+                        log::info!("connection from {} is closed", self.socket_address());
+                        return Err(OzesError::WithouConnection);
+                    }
+                    break size;
                 }
-                size
-            }
-            Err(error) => {
-                log::error!(
-                    "error on read message from connection {}: {}",
-                    self.socket_address(),
-                    error
-                );
-                return Err(error)?;
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(error) => {
+                    log::error!(
+                        "error on read message from connection {}: {}",
+                        self.socket_address(),
+                        error
+                    );
+                    return Err(error)?;
+                }
             }
         };
         if size > BUFFER_SIZE {
@@ -68,7 +71,7 @@ impl OzesConnection {
         &self.socket_address
     }
 
-    pub fn stream(&self) -> &Mutex<TcpStream> {
+    pub fn stream(&self) -> &RwLock<TcpStream> {
         &self.stream
     }
 }
