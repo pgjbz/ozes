@@ -30,6 +30,14 @@ impl OzesConnection {
         self.send_message(&format!("error \"{message}\"")).await
     }
 
+    pub async fn ok_subscribed(&self) -> OzResult<()> {
+        self.send_message("ok subscribed").await
+    }
+
+    pub async fn ok_publisher(&self) -> OzResult<()> {
+        self.send_message("ok publisher").await
+    }
+
     pub async fn read_message(&self) -> OzResult<String> {
         let stream = self.stream.read().await;
         let mut buffer = vec![0; BUFFER_SIZE];

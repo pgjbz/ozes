@@ -100,7 +100,7 @@ async fn handle_publisher(
     message_queue: Arc<Mutex<MQueue>>,
     queue_name: String,
 ) -> OzResult<()> {
-    if connection.send_message("Ok publisher").await.is_ok() {
+    if connection.ok_publisher().await.is_ok() {
         log::info!("handle publisher: {}", connection.socket_address());
         loop {
             let message = connection.read_message().await?;

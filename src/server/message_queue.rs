@@ -53,12 +53,8 @@ impl MQueue {
                 group.push_connection(Arc::clone(&connection)).await;
                 groups_write.push(group);
             }
-            if connection.send_message("ok subscribed").await.is_err() {
-                log::error!(
-                    "error on confirm subscribe of connection {}",
-                    connection.socket_address()
-                );
-            }
+            let _ = connection.ok_subscribed().await;
+
             log::debug!("finish to add consumer to existent grou in queue {queue_name}");
             return;
         }
@@ -74,11 +70,7 @@ impl MQueue {
         self.queues
             .insert(queue_name.to_string(), Arc::new(inner_queue));
 
-        if connection.send_message("ok subscribed").await.is_err() {
-            log::error!(
-                "error on confirm subscribe of connection {}",
-                connection.socket_address()
-            );
+        if connection.ok_subscribed().await.is_err() {
             return;
         }
         self.queues.get(queue_name).unwrap().push_group(group).await;
