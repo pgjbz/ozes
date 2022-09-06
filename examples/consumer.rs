@@ -2,8 +2,6 @@ use std::{
     env,
     io::{Read, Write},
     net::TcpStream,
-    thread,
-    time::Duration,
 };
 
 use ozes::BUFFER_SIZE;
