@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
 
+use bytes::Bytes;
+
 use crate::{
     connection::OzesConnection,
     parser::{self, Command},
@@ -45,14 +47,14 @@ impl Group {
         self.connections.push(connection);
     }
 
-    pub async fn send_message(&mut self, message: &str) -> OzResult<()> {
+    pub async fn send_message(&mut self, message: Bytes) -> OzResult<()> {
         loop {
             if self.connections.is_empty() {
                 break;
             }
             if let Some(connection) = self.connections.get(self.actual_con()) {
                 let connection = Arc::clone(connection);
-                match connection.send_message(message).await {
+                match connection.send_message(message.clone()).await {
                     Ok(_) => match self.process_client_return(connection).await {
                         Err(error) if error.is_error(OzesError::WithouConnection) => {
                             self.pop_current_connection();
@@ -74,7 +76,10 @@ impl Group {
                         }
                     },
                     Err(e) => {
-                        log::error!("error on send message {message} to currently connection {e}");
+                        log::error!(
+                            "error on send message {} to currently connection {e}",
+                            String::from_utf8_lossy(&message)
+                        );
                         self.pop_current_connection();
                         continue;
                     }
@@ -102,18 +107,22 @@ impl Group {
                 Ok(cmds) => {
                     if cmds.len() != 1 {
                         connection
-                            .send_error_message("expected exactly one command\n")
+                            .send_error_message(Bytes::from_static(
+                                b"expected exactly one command\n",
+                            ))
                             .await?;
                     } else if cmds[0] != Command::Ok {
                         connection
-                            .send_error_message("expected 'Ok' one command\n")
+                            .send_error_message(Bytes::from_static(b"expected 'Ok' one command\n"))
                             .await?
                     }
                     Ok(())
                 }
                 Err(error) => {
                     println!("parse error: {}", error);
-                    connection.send_error_message(&error.to_string()).await
+                    connection
+                        .send_error_message(Bytes::copy_from_slice(error.to_string().as_bytes()))
+                        .await
                 }
             }
         } else {

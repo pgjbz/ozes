@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use bytes::Bytes;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::RwLock};
 
 use crate::{
@@ -20,25 +21,33 @@ impl OzesConnection {
         }
     }
 
-    pub async fn send_message(&self, message: &str) -> OzResult<()> {
+    pub async fn send_message(&self, message: Bytes) -> OzResult<()> {
         let mut stream = self.stream.write().await;
-        stream.write_all(message.as_bytes()).await?;
+        stream.write_all(&message).await?;
         Ok(())
     }
 
-    pub async fn send_error_message(&self, message: &str) -> OzResult<()> {
-        self.send_message(&format!("error \"{message}\"")).await
+    pub async fn send_error_message(&self, message: Bytes) -> OzResult<()> {
+        let message_string = String::from_utf8_lossy(&message);
+        let message = format!("error \"{message_string}\"");
+        self.send_message(Bytes::copy_from_slice(message.as_bytes()))
+            .await
     }
 
     pub async fn ok_subscribed(&self) -> OzResult<()> {
-        self.send_message("ok subscribed").await
+        self.send_message(Bytes::from_static(b"ok subscribed"))
+            .await
     }
 
     pub async fn ok_publisher(&self) -> OzResult<()> {
-        self.send_message("ok publisher").await
+        self.send_message(Bytes::from_static(b"ok publisher")).await
     }
 
-    pub async fn read_message(&self) -> OzResult<String> {
+    pub async fn ok_message(&self) -> OzResult<()> {
+        self.send_message(Bytes::from_static(b"ok message")).await
+    }
+
+    pub async fn read_message(&self) -> OzResult<Bytes> {
         let stream = self.stream.read().await;
         let mut buffer = vec![0; BUFFER_SIZE];
 
@@ -69,8 +78,7 @@ impl OzesConnection {
         if size > BUFFER_SIZE {
             return Err(OzesError::ToLongMessage);
         }
-        let message = String::from_utf8(buffer).unwrap();
-        Ok(message)
+        Ok(Bytes::copy_from_slice(&buffer[0..size]))
     }
 
     pub fn socket_address(&self) -> &SocketAddr {

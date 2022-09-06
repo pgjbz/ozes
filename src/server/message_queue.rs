@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use bytes::Bytes;
 use tokio::sync::Mutex;
 
 use super::{group::Group, OzResult, OzesConnection};
@@ -78,16 +79,18 @@ impl MQueue {
         log::info!("listener add to queue {queue_name} with group {group_name}");
     }
 
-    pub async fn send_message(&mut self, message: &str, queue_name: &str) -> OzResult<()> {
-        log::info!("checking if {queue_name} exists");
-        if let Some(queue) = self.queues.get(queue_name) {
+    pub async fn send_message(&mut self, message: Bytes, queue_name: Bytes) -> OzResult<()> {
+        let queue_name = String::from_utf8_lossy(&queue_name[..]);
+        log::info!("checking if {queue_name} exists",);
+        if let Some(queue) = self.queues.get(&*queue_name) {
             let mut groups = queue.groups.lock().await;
             log::info!(
-                "queue {queue_name} founded, iter over {} groupus",
+                "queue {} founded, iter over {} groupus",
+                queue_name,
                 groups.len()
             );
             for group in groups.iter_mut() {
-                group.send_message(message).await?;
+                group.send_message(message.clone()).await?;
             }
         } else {
             let inner_queue = InnerQueue {

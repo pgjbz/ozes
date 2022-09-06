@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use bytes::Bytes;
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum TokenType {
     Ok,
@@ -13,17 +15,18 @@ pub enum TokenType {
     Publisher,
     Subscribe,
     Semicolon,
+    Binary,
 }
 
-impl From<&str> for TokenType {
-    fn from(input: &str) -> Self {
-        match &input.to_lowercase()[..] {
-            "with" => Self::With,
-            "group" => Self::Group,
-            "publisher" => Self::Publisher,
-            "subscribe" => Self::Subscribe,
-            "message" => Self::Message,
-            "ok" => Self::Ok,
+impl From<&[u8]> for TokenType {
+    fn from(input: &[u8]) -> Self {
+        match &input.to_ascii_lowercase()[..] {
+            b"with" => Self::With,
+            b"group" => Self::Group,
+            b"publisher" => Self::Publisher,
+            b"subscribe" => Self::Subscribe,
+            b"message" => Self::Message,
+            b"ok" => Self::Ok,
             _ => Self::Name,
         }
     }
@@ -43,6 +46,7 @@ impl Display for TokenType {
             Self::Text => "text",
             Self::Semicolon => ";",
             Self::Illegal => "illegal",
+            Self::Binary => "binary",
         };
         write!(f, "{}", name)
     }
@@ -51,11 +55,11 @@ impl Display for TokenType {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     token_type: TokenType,
-    value: Option<String>,
+    value: Option<Bytes>,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: Option<String>) -> Self {
+    pub fn new(token_type: TokenType, value: Option<Bytes>) -> Self {
         Self { token_type, value }
     }
 
@@ -63,7 +67,7 @@ impl Token {
         self.token_type
     }
 
-    pub fn value(&self) -> Option<String> {
+    pub fn value(&self) -> Option<Bytes> {
         self.value.clone()
     }
 }

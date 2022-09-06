@@ -1,50 +1,58 @@
 mod token;
 
+use bytes::Bytes;
 pub use token::{Token, TokenType};
 
+//TODO: use bytes to improve input data and support binary
 pub struct Lexer {
-    input: String,
+    input: Bytes,
     idx: usize,
 }
 
 impl Lexer {
-    pub fn new(input: String) -> Self {
+    pub fn new(input: Bytes) -> Self {
         Self { input, idx: 0 }
     }
 
     pub fn next_token(&mut self) -> Token {
-        self.skip_until(|c| c.is_whitespace() && c != '\0');
+        self.skip_until(|c| c.is_ascii_whitespace() && c != &0u8);
         let start = self.idx;
 
         match self.current_char() {
-            ('a'..='z') | ('A'..='Z') | '_' => {
-                self.skip_until(|c| c.is_alphanumeric() || c == '_' || c == '.');
+            (b'a'..=b'z') | (b'A'..=b'Z') | b'_' => {
+                self.skip_until(|c| {
+                    (c.is_ascii_alphanumeric() || c == &b'_' || c == &b'.') && c != &0u8
+                });
                 let end = self.idx;
                 self.consume();
                 let slice = &self.input[start..end];
                 let token_type = TokenType::from(slice);
-                Token::new(token_type, Some(slice.to_owned()))
+
+                Token::new(token_type, Some(Bytes::copy_from_slice(slice)))
             }
-            '"' => {
+            b'"' => {
                 self.consume();
                 let start = self.idx;
-                self.skip_until(|c| c != '"');
+                self.skip_until(|c| c != &b'"');
                 let end = self.idx;
                 self.consume();
-                Token::new(TokenType::Text, Some((&self.input[start..end]).to_owned()))
+                Token::new(
+                    TokenType::Text,
+                    Some(Bytes::copy_from_slice(&self.input[start..end])),
+                )
             }
-            ';' => {
+            b';' => {
                 self.consume();
                 Token::new(TokenType::Semicolon, None)
             }
-            '\0' => Token::new(TokenType::Eof, None),
+            0 => Token::new(TokenType::Eof, None),
             _ => {
                 let start = self.idx;
-                self.skip_until(|c| !c.is_whitespace() && c != '\0');
+                self.skip_until(|c| !c.is_ascii_whitespace() && c != &0u8);
                 let end = self.idx;
                 Token::new(
                     TokenType::Illegal,
-                    Some((&self.input[start..end]).to_owned()),
+                    Some(Bytes::copy_from_slice(&self.input[start..end])),
                 )
             }
         }
@@ -52,7 +60,7 @@ impl Lexer {
 
     fn skip_until<F>(&mut self, until: F)
     where
-        F: Fn(char) -> bool,
+        F: Fn(&u8) -> bool,
     {
         while until(self.current_char()) {
             self.consume()
@@ -63,8 +71,8 @@ impl Lexer {
         self.idx += 1;
     }
 
-    fn current_char(&self) -> char {
-        self.input.chars().nth(self.idx).unwrap_or('\0')
+    fn current_char(&self) -> &u8 {
+        self.input.get(self.idx).unwrap_or(&0u8)
     }
 }
 
@@ -106,10 +114,11 @@ mod tests {
 
     #[test]
     fn given_sequence_should_be_tokenize_correctly() {
-        let input = "with foo _foo 
+        let input = Bytes::from_static(
+            b"with foo _foo 
         \"bar baz\" publisher 
-        group ; 123 message _123 4+8 pgjbz.dev"
-            .to_string();
+        group ; 123 message _123 4+8 pgjbz.dev",
+        );
         let expecteds = [
             TokenType::With,
             TokenType::Name,
@@ -139,13 +148,13 @@ mod tests {
 
     #[test]
     fn given_sequence_value_should_be_ok() {
-        let input = "subscribe foo with group bar".to_string();
+        let input = Bytes::from_static(b"subscribe foo with group bar");
         let expecteds = [
-            Token::new(TokenType::Subscribe, Some("subscribe".to_owned())),
-            Token::new(TokenType::Name, Some("foo".to_owned())),
-            Token::new(TokenType::With, Some("with".to_owned())),
-            Token::new(TokenType::Group, Some("group".to_owned())),
-            Token::new(TokenType::Name, Some("bar".to_owned())),
+            Token::new(TokenType::Subscribe, Some(Bytes::from_static(b"subscribe"))),
+            Token::new(TokenType::Name, Some(Bytes::from_static(b"foo"))),
+            Token::new(TokenType::With, Some(Bytes::from_static(b"with"))),
+            Token::new(TokenType::Group, Some(Bytes::from_static(b"group"))),
+            Token::new(TokenType::Name, Some(Bytes::from_static(b"bar"))),
         ];
         let mut lexer = Lexer::new(input);
         for expected in expecteds {

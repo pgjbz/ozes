@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bytes::Bytes;
 use tokio::{
     net::TcpListener,
     sync::{Mutex, RwLock},
@@ -58,7 +59,11 @@ async fn handle_connection(
                         message_queue
                             .lock()
                             .await
-                            .add_listener(connection, &queue_name, &group_name)
+                            .add_listener(
+                                connection,
+                                &String::from_utf8_lossy(&queue_name),
+                                &String::from_utf8_lossy(&group_name),
+                            )
                             .await;
                     }
                     Command::Publisher { queue_name } => {
@@ -70,14 +75,16 @@ async fn handle_connection(
                     }
                     Command::Message { .. } => {
                         connection
-                            .send_error_message("have to be a publisher before send a message")
+                            .send_error_message(Bytes::from_static(
+                                b"have to be a publisher before send a message",
+                            ))
                             .await?;
                     }
                     Command::Ok => {
                         connection
-                            .send_error_message(
-                                "ok command is able only when client receive a message",
-                            )
+                            .send_error_message(Bytes::from_static(
+                                b"ok command is able only when client receive a message",
+                            ))
                             .await?;
                     }
                 }
@@ -88,7 +95,9 @@ async fn handle_connection(
                 "error with connection {}: {error}",
                 connection.socket_address()
             );
-            connection.send_error_message(&error.to_string()).await?;
+            connection
+                .send_error_message(Bytes::copy_from_slice(error.to_string().as_bytes()))
+                .await?;
             return Ok(());
         }
     }
@@ -98,7 +107,7 @@ async fn handle_connection(
 async fn handle_publisher(
     connection: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
-    queue_name: String,
+    queue_name: Bytes,
 ) -> OzResult<()> {
     if connection.ok_publisher().await.is_ok() {
         log::info!("handle publisher: {}", connection.socket_address());
@@ -116,7 +125,11 @@ async fn handle_publisher(
                     .await?;
                     continue;
                 }
-                Err(error) => connection.send_error_message(&error.to_string()).await?,
+                Err(error) => {
+                    connection
+                        .send_error_message(Bytes::copy_from_slice(error.to_string().as_bytes()))
+                        .await?
+                }
             }
         }
     }
@@ -125,7 +138,7 @@ async fn handle_publisher(
 
 async fn process_commands(
     commands: Vec<Command>,
-    queue_name: String,
+    queue_name: Bytes,
     publisher: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
 ) -> OzResult<()> {
@@ -134,7 +147,7 @@ async fn process_commands(
             Command::Message { message } => {
                 process_message_command(
                     message,
-                    &queue_name,
+                    queue_name.clone(),
                     Arc::clone(&publisher),
                     Arc::clone(&message_queue),
                 )
@@ -142,19 +155,23 @@ async fn process_commands(
             }
             Command::Subscriber { .. } => {
                 publisher
-                    .send_error_message("you cannot subscribe to a queue when you are a publisher")
+                    .send_error_message(Bytes::from_static(
+                        b"you cannot subscribe to a queue when you are a publisher",
+                    ))
                     .await?
             }
             Command::Publisher { .. } => {
                 publisher
-                    .send_error_message("you cannot change queue to publish message")
+                    .send_error_message(Bytes::from_static(
+                        b"you cannot change queue to publish message",
+                    ))
                     .await?
             }
             Command::Ok => {
                 publisher
-                    .send_error_message(
-                        "ok command is able only to subscribers when receive message",
-                    )
+                    .send_error_message(Bytes::from_static(
+                        b"ok command is able only to subscribers when receive message",
+                    ))
                     .await?
             }
         }
@@ -163,17 +180,21 @@ async fn process_commands(
 }
 
 async fn process_message_command(
-    message: String,
-    queue_name: &str,
+    message: Bytes,
+    queue_name: Bytes,
     publisher: Arc<OzesConnection>,
     message_queue: Arc<Mutex<MQueue>>,
 ) -> OzResult<()> {
-    log::info!("send {} to {} queue", message, queue_name);
-    publisher.send_message("Ok message").await?;
+    log::info!(
+        "send {} to {} queue",
+        String::from_utf8_lossy(&message),
+        String::from_utf8_lossy(&queue_name)
+    );
+    publisher.ok_message().await?;
     message_queue
         .lock()
         .await
-        .send_message(&message, queue_name)
+        .send_message(message, queue_name)
         .await?;
     Ok(())
 }

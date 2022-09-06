@@ -1,6 +1,7 @@
 use crate::lexer::{Lexer, Token, TokenType};
 
 mod parse_error;
+use bytes::Bytes;
 pub use parse_error::ParseError;
 
 use self::parse_error::ParseResult;
@@ -8,14 +9,14 @@ use self::parse_error::ParseResult;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Message {
-        message: String,
+        message: Bytes,
     },
     Publisher {
-        queue_name: String,
+        queue_name: Bytes,
     },
     Subscriber {
-        queue_name: String,
-        group_name: String,
+        queue_name: Bytes,
+        group_name: Bytes,
     },
     Ok,
 }
@@ -131,7 +132,7 @@ impl Parser {
 }
 
 #[inline(always)]
-pub fn parse(input: String) -> ParseResult {
+pub fn parse(input: Bytes) -> ParseResult {
     let mut parser = Parser::new(Lexer::new(input));
     parser.parse_commands()
 }
@@ -256,7 +257,7 @@ mod tests {
         }
     }
 
-    fn build_parser(input: String) -> Parser {
+    fn build_parser(input: Bytes) -> Parser {
         let lexer = Lexer::new(input);
         Parser::new(lexer)
     }
