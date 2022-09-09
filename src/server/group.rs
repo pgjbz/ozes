@@ -43,7 +43,7 @@ impl Group {
         }
     }
 
-    pub async fn push_connection(&mut self, connection: Arc<OzesConnection>) {
+    pub fn push_connection(&mut self, connection: Arc<OzesConnection>) {
         self.connections.push(connection);
     }
 
