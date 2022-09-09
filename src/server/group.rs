@@ -35,29 +35,28 @@ impl Group {
         *self.actual_con.lock().unwrap()
     }
 
-    fn pop_current_connection(&mut self) {
+    async fn pop_current_connection(&mut self) {
         let actual_con = self.actual_con();
-        if let Some(connection) = self.connections.get(actual_con) {
+        if let Some(connection) = self.connections.get(actual_con).await {
             log::info!("pop connection {}", connection.socket_address());
-            self.connections.remove(actual_con);
+            self.connections.remove(actual_con).await;
         }
     }
 
-    pub fn push_connection(&mut self, connection: Arc<OzesConnection>) {
-        self.connections.push(connection);
+    pub async fn push_connection(&mut self, connection: Arc<OzesConnection>) {
+        self.connections.push(connection).await;
     }
 
     pub async fn send_message(&mut self, message: Bytes) -> OzResult<()> {
         loop {
-            if self.connections.is_empty() {
+            if self.connections.is_empty().await {
                 break;
             }
-            if let Some(connection) = self.connections.get(self.actual_con()) {
-                let connection = Arc::clone(connection);
+            if let Some(connection) = self.connections.get(self.actual_con()).await {
                 match connection.send_message(message.clone()).await {
                     Ok(_) => match self.process_client_return(connection).await {
                         Err(error) if error.is_error(OzesError::WithouConnection) => {
-                            self.pop_current_connection();
+                            self.pop_current_connection().await;
                             continue;
                         }
                         Err(error) if error.is_error(OzesError::UnknownError(String::new())) => {
@@ -80,7 +79,7 @@ impl Group {
                             "error on send message {} to currently connection {e}",
                             String::from_utf8_lossy(&message)
                         );
-                        self.pop_current_connection();
+                        self.pop_current_connection().await;
                         continue;
                     }
                 }

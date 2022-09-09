@@ -5,7 +5,8 @@ use tokio::sync::{Mutex, RwLock};
 
 use super::{group::Group, OzResult, OzesConnection};
 
-pub type OzesConnections = Vec<Arc<OzesConnection>>;
+#[derive(Default)]
+pub struct OzesConnections(RwLock<Vec<Arc<OzesConnection>>>);
 
 #[derive(Default)]
 struct QueueWrapper(RwLock<HashMap<String, Arc<InnerQueue>>>);
@@ -45,7 +46,7 @@ impl MQueue {
             let mut groups_write = inner_queue.groups.lock().await;
             for group in groups_write.iter_mut() {
                 if group.name() == group_name {
-                    group.push_connection(Arc::clone(&connection));
+                    group.push_connection(Arc::clone(&connection)).await;
                     founded = true;
                     log::debug!("finish to add consumer to existent group");
                     break;
@@ -53,7 +54,7 @@ impl MQueue {
             }
             if !founded {
                 let mut group = Group::new(group_name.to_string());
-                group.push_connection(Arc::clone(&connection));
+                group.push_connection(Arc::clone(&connection)).await;
                 groups_write.push(group);
             }
             let _ = connection.ok_subscribed().await;
@@ -65,7 +66,7 @@ impl MQueue {
         log::info!("adding new group {group_name} to queue {queue_name}");
         let mut group = Group::new(group_name.to_string());
         log::info!("adding connection to new group {group_name}");
-        group.push_connection(Arc::clone(&connection));
+        group.push_connection(Arc::clone(&connection)).await;
         let inner_queue = InnerQueue {
             groups: Default::default(),
         };
@@ -122,5 +123,23 @@ impl QueueWrapper {
 
     async fn insert(&self, key: &str, value: Arc<InnerQueue>) {
         self.0.write().await.insert(key.to_string(), value);
+    }
+}
+
+impl OzesConnections {
+    pub(crate) async fn get(&self, idx: usize) -> Option<Arc<OzesConnection>> {
+        self.0.read().await.get(idx).map(Arc::clone)
+    }
+
+    pub(crate) async fn remove(&self, idx: usize) {
+        self.0.write().await.remove(idx);
+    }
+
+    pub(crate) async fn push(&self, connection: Arc<OzesConnection>) {
+        self.0.write().await.push(connection)
+    }
+
+    pub(crate) async fn is_empty(&self) -> bool {
+        self.0.read().await.is_empty()
     }
 }
