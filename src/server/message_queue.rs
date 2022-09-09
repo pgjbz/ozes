@@ -22,8 +22,8 @@ struct InnerQueue {
 
 impl InnerQueue {
     async fn push_group(&self, group: Group) {
-        let mut groups_write = self.groups.lock().await;
-        groups_write.push(group);
+        let mut groups = self.groups.lock().await;
+        groups.push(group);
     }
 }
 
@@ -39,12 +39,11 @@ impl MQueue {
             connection.socket_address()
         );
 
-        //let mut queues_write = self.queues.write().await;
         let mut founded = false;
         if self.queues.contains_key(queue_name).await {
             let inner_queue = self.queues.get(queue_name).await.unwrap();
-            let mut groups_write = inner_queue.groups.lock().await;
-            for group in groups_write.iter_mut() {
+            let mut groups = inner_queue.groups.lock().await;
+            for group in groups.iter_mut() {
                 if group.name() == group_name {
                     group.push_connection(Arc::clone(&connection)).await;
                     founded = true;
@@ -55,7 +54,7 @@ impl MQueue {
             if !founded {
                 let mut group = Group::new(group_name.to_string());
                 group.push_connection(Arc::clone(&connection)).await;
-                groups_write.push(group);
+                groups.push(group);
             }
             let _ = connection.ok_subscribed().await;
 
