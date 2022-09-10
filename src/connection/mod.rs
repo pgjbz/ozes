@@ -1,7 +1,10 @@
 use std::net::SocketAddr;
 
 use bytes::Bytes;
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::RwLock};
+use tokio::{
+    net::TcpStream,
+    time::{self, Duration},
+};
 
 use crate::{
     server::error::{OzResult, OzesError},
@@ -9,21 +12,47 @@ use crate::{
 };
 
 pub struct OzesConnection {
-    stream: RwLock<TcpStream>,
+    stream: TcpStream,
     socket_address: SocketAddr,
 }
 
 impl OzesConnection {
-    pub fn new(stream: RwLock<TcpStream>, socket_address: SocketAddr) -> Self {
+    pub fn new(stream: TcpStream, socket_address: SocketAddr) -> Self {
         Self {
             stream,
             socket_address,
         }
     }
 
+    async fn send(&self, message: Bytes) -> OzResult<usize> {
+        let sized = loop {
+            self.stream.writable().await?;
+            match self.stream.try_write(&message) {
+                Ok(n) => break n,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    continue;
+                }
+                Err(error) => {
+                    log::error!(
+                        "error on read message from connection {}: {}",
+                        self.socket_address(),
+                        error
+                    );
+                    return Err(error)?;
+                }
+            }
+        };
+        Ok(sized)
+    }
+
     pub async fn send_message(&self, message: Bytes) -> OzResult<()> {
-        let mut stream = self.stream.write().await;
-        stream.write_all(&message).await?;
+        tokio::select! {
+            res = self.send(message) => {let _ = res?;}
+            _ = time::sleep(Duration::from_millis(500)) => {
+                log::error!("write message time out");
+                return Err(OzesError::TimeOut);
+            }
+        }
         Ok(())
     }
 
@@ -48,12 +77,11 @@ impl OzesConnection {
     }
 
     pub async fn read_message(&self) -> OzResult<Bytes> {
-        let stream = self.stream.read().await;
         let mut buffer = vec![0; BUFFER_SIZE];
 
         let size = loop {
-            stream.readable().await?;
-            match stream.try_read(&mut buffer) {
+            self.stream.readable().await?;
+            match self.stream.try_read(&mut buffer) {
                 Ok(size) => {
                     if size == 0 {
                         log::info!("connection from {} is closed", self.socket_address());
@@ -85,7 +113,7 @@ impl OzesConnection {
         &self.socket_address
     }
 
-    pub fn stream(&self) -> &RwLock<TcpStream> {
+    pub fn stream(&self) -> &TcpStream {
         &self.stream
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::net::TcpListener;
 
 use crate::{
     connection::OzesConnection,
@@ -27,7 +27,7 @@ pub async fn start_server(port: u16) -> OzResult<()> {
             Ok((stream, socket_address)) => {
                 let queue = Arc::clone(&queues);
                 tokio::task::spawn(handle_connection(
-                    OzesConnection::new(RwLock::new(stream), socket_address),
+                    OzesConnection::new(stream, socket_address),
                     queue,
                 ));
             }
@@ -195,6 +195,6 @@ async fn process_message_command(
         String::from_utf8_lossy(&queue_name)
     );
     publisher.ok_message().await?;
-    message_queue.send_message(message, queue_name).await?;
+    message_queue.push_message(message, queue_name).await?;
     Ok(())
 }

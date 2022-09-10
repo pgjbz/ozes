@@ -99,7 +99,7 @@ impl MQueue {
         }
     }
 
-    pub async fn send_message(&self, message: Bytes, queue_name: Bytes) -> OzResult<()> {
+    pub async fn push_message(&self, message: Bytes, queue_name: Bytes) -> OzResult<()> {
         let queue_name = String::from_utf8_lossy(&queue_name[..]);
         log::info!("checking if {queue_name} exists",);
         if let Some(queue) = self.queues.get(&*queue_name).await {
