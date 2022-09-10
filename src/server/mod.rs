@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use tokio::{
-    net::TcpListener,
-    sync::{Mutex, RwLock},
-};
+use tokio::{net::TcpListener, sync::RwLock};
 
 use crate::{
     connection::OzesConnection,
@@ -18,10 +15,12 @@ pub(crate) mod error;
 mod group;
 mod message_queue;
 
+type Queues = Arc<MQueue>;
+
 pub async fn start_server(port: u16) -> OzResult<()> {
     let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);
-    let queues = Arc::new(Mutex::new(MQueue::default()));
+    let queues = Arc::new(MQueue::default());
     tokio::spawn(process_queues(Arc::clone(&queues)));
     loop {
         match listener.accept().await {
@@ -37,9 +36,8 @@ pub async fn start_server(port: u16) -> OzResult<()> {
     }
 }
 
-async fn process_queues(queues: Arc<Mutex<MQueue>>) {
+async fn process_queues(queues: Arc<MQueue>) {
     loop {
-        let queues = queues.lock().await;
         let keys = queues.get_keys().await;
         for key in keys {
             if let Some(queue) = queues.get(&key).await {
@@ -49,10 +47,7 @@ async fn process_queues(queues: Arc<Mutex<MQueue>>) {
     }
 }
 
-async fn handle_connection(
-    ozes_connection: OzesConnection,
-    message_queue: Arc<Mutex<MQueue>>,
-) -> OzResult<()> {
+async fn handle_connection(ozes_connection: OzesConnection, message_queue: Queues) -> OzResult<()> {
     log::info!(
         "handle connection from address {}",
         ozes_connection.socket_address()
@@ -70,8 +65,6 @@ async fn handle_connection(
                         group_name,
                     } => {
                         message_queue
-                            .lock()
-                            .await
                             .add_listener(
                                 connection,
                                 &String::from_utf8_lossy(&queue_name),
@@ -119,7 +112,7 @@ async fn handle_connection(
 
 async fn handle_publisher(
     connection: Arc<OzesConnection>,
-    message_queue: Arc<Mutex<MQueue>>,
+    message_queue: Queues,
     queue_name: Bytes,
 ) -> OzResult<()> {
     if connection.ok_publisher().await.is_ok() {
@@ -153,7 +146,7 @@ async fn process_commands(
     commands: Vec<Command>,
     queue_name: Bytes,
     publisher: Arc<OzesConnection>,
-    message_queue: Arc<Mutex<MQueue>>,
+    message_queue: Queues,
 ) -> OzResult<()> {
     for command in commands {
         match command {
@@ -196,7 +189,7 @@ async fn process_message_command(
     message: Bytes,
     queue_name: Bytes,
     publisher: Arc<OzesConnection>,
-    message_queue: Arc<Mutex<MQueue>>,
+    message_queue: Queues,
 ) -> OzResult<()> {
     log::info!(
         "send {} to {} queue",
@@ -204,10 +197,6 @@ async fn process_message_command(
         String::from_utf8_lossy(&queue_name)
     );
     publisher.ok_message().await?;
-    message_queue
-        .lock()
-        .await
-        .send_message(message, queue_name)
-        .await?;
+    message_queue.send_message(message, queue_name).await?;
     Ok(())
 }
