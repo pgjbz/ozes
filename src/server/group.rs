@@ -64,9 +64,13 @@ impl Group {
                             log::info!("unknow error: {} retry", error);
                             continue;
                         }
-                        Err(err) => {
+                        Err(error) if error.is_error(OzesError::TimeOut) => {
+                            self.next_connection();
+                            continue;
+                        }
+                        Err(error) => {
                             //TODO: fix generic error catcher
-                            log::info!("error {:?} retry", err);
+                            log::info!("error {:?} retry", error);
                             continue;
                         }
                         Ok(_) => {

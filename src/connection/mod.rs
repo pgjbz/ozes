@@ -76,7 +76,7 @@ impl OzesConnection {
         self.send_message(Bytes::from_static(b"ok message")).await
     }
 
-    pub async fn read_message(&self) -> OzResult<Bytes> {
+    async fn read(&self) -> OzResult<Bytes> {
         let mut buffer = vec![0; BUFFER_SIZE];
 
         let size = loop {
@@ -107,6 +107,17 @@ impl OzesConnection {
             return Err(OzesError::ToLongMessage);
         }
         Ok(Bytes::copy_from_slice(&buffer[0..size]))
+    }
+
+    pub async fn read_message(&self) -> OzResult<Bytes> {
+        let result = tokio::select! {
+            res = self.read() => {res?}
+            _ = time::sleep(Duration::from_millis(500)) => {
+                log::error!("write message time out");
+                return Err(OzesError::TimeOut);
+            }
+        };
+        Ok(result)
     }
 
     pub fn socket_address(&self) -> &SocketAddr {
