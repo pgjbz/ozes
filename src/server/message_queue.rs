@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 
 use super::{group::Group, OzResult, OzesConnection};
 
@@ -21,14 +21,14 @@ pub struct MQueue {
 
 #[derive(Default)]
 pub(super) struct InnerQueue {
-    groups: Mutex<Vec<Group>>,
+    groups: RwLock<Vec<Group>>,
     messages: RwLock<VecDeque<Bytes>>,
 }
 
 impl InnerQueue {
     fn with_groups(groups: Vec<Group>) -> Self {
         Self {
-            groups: Mutex::new(groups),
+            groups: RwLock::new(groups),
             messages: RwLock::default(),
         }
     }
@@ -39,8 +39,8 @@ impl InnerQueue {
 
     pub(crate) async fn process_message(&self) {
         if let Some(message) = self.get_message().await {
-            let mut groups = self.groups.lock().await;
-            for group in groups.iter_mut() {
+            let groups = self.groups.read().await;
+            for group in groups.iter() {
                 let _ = group.send_message(&message).await;
             }
         }
@@ -66,7 +66,7 @@ impl MQueue {
         let mut founded = false;
         if self.queues.contains_key(queue_name).await {
             let inner_queue = self.queues.get(queue_name).await.unwrap();
-            let mut groups = inner_queue.groups.lock().await;
+            let mut groups = inner_queue.groups.write().await;
             for group in groups.iter_mut() {
                 if group.name() == group_name {
                     group.push_connection(Arc::clone(&connection)).await;

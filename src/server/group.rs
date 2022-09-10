@@ -35,7 +35,7 @@ impl Group {
         *self.actual_con.lock().unwrap()
     }
 
-    async fn pop_current_connection(&mut self) {
+    async fn pop_current_connection(&self) {
         let actual_con = self.actual_con();
         if let Some(connection) = self.connections.get(actual_con).await {
             log::info!("pop connection {}", connection.socket_address());
@@ -47,7 +47,7 @@ impl Group {
         self.connections.push(connection).await;
     }
 
-    pub async fn send_message(&mut self, message: &Bytes) -> OzResult<()> {
+    pub async fn send_message(&self, message: &Bytes) -> OzResult<()> {
         loop {
             if self.connections.is_empty().await {
                 break;
