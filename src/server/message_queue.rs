@@ -63,36 +63,36 @@ impl MQueue {
             connection.socket_address()
         );
 
-        let mut founded = false;
-        if self.queues.contains_key(queue_name).await {
-            let inner_queue = self.queues.get(queue_name).await.unwrap();
-            let mut groups = inner_queue.groups.write().await;
-            for group in groups.iter_mut() {
-                if group.name() == group_name {
+        if let Some(inner) = self.queues.get(queue_name).await {
+            let mut groups = inner.groups.write().await;
+            if connection.ok_subscribed().await.is_ok() {
+                if let Some(group) = groups.iter_mut().find(|g| g.name() == group_name) {
                     group.push_connection(Arc::clone(&connection)).await;
-                    founded = true;
-                    log::debug!("finish to add consumer to existent group");
-                    break;
+                } else {
+                    let mut group = Group::new(group_name.to_string());
+                    group.push_connection(Arc::clone(&connection)).await;
+                    groups.push(group);
+                    log::debug!("finish to add consumer to existent group in queue {queue_name}");
                 }
             }
-            if !founded {
-                let mut group = Group::new(group_name.to_string());
-                group.push_connection(Arc::clone(&connection)).await;
-                groups.push(group);
-            }
-            let _ = connection.ok_subscribed().await;
-
-            log::debug!("finish to add consumer to existent grou in queue {queue_name}");
-            return;
+        } else {
+            self.add_queue_with_listener(group_name, connection, queue_name)
+                .await;
         }
+    }
 
+    async fn add_queue_with_listener(
+        &self,
+        group_name: &str,
+        connection: Arc<OzesConnection>,
+        queue_name: &str,
+    ) {
         log::info!("adding new group {group_name} to queue {queue_name}");
         let mut group = Group::new(group_name.to_string());
         log::info!("adding connection to new group {group_name}");
         group.push_connection(Arc::clone(&connection)).await;
         log::info!("adding group {group_name} to queue {queue_name}");
         let inner_queue = InnerQueue::with_groups(vec![group]);
-
         if connection.ok_subscribed().await.is_ok() {
             self.queues.insert(queue_name, Arc::new(inner_queue)).await;
             log::info!("listener add to queue {queue_name} with group {group_name}");
@@ -126,10 +126,6 @@ impl MQueue {
 }
 
 impl QueueWrapper {
-    async fn contains_key(&self, key: &str) -> bool {
-        self.0.read().await.contains_key(key)
-    }
-
     async fn get(&self, key: &str) -> Option<Arc<InnerQueue>> {
         self.0.read().await.get(key).map(Arc::clone)
     }
