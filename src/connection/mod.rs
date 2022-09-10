@@ -25,10 +25,10 @@ impl OzesConnection {
     }
 
     async fn send(&self, message: Bytes) -> OzResult<usize> {
-        let sized = loop {
+        loop {
             self.stream.writable().await?;
             match self.stream.try_write(&message) {
-                Ok(n) => break n,
+                Ok(n) => break Ok(n),
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     continue;
                 }
@@ -41,8 +41,7 @@ impl OzesConnection {
                     return Err(error)?;
                 }
             }
-        };
-        Ok(sized)
+        }
     }
 
     pub async fn send_message(&self, message: Bytes) -> OzResult<()> {
