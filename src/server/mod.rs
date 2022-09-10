@@ -161,9 +161,7 @@ async fn process_commands(
             }
             Command::Subscriber { .. } => {
                 publisher
-                    .send_error_message(Bytes::from_static(
-                        b"cannot subscribe when is a publisher",
-                    ))
+                    .send_error_message(Bytes::from_static(b"cannot subscribe when is a publisher"))
                     .await?
             }
             Command::Publisher { .. } => {
