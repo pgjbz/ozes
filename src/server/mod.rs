@@ -22,6 +22,7 @@ pub async fn start_server(port: u16) -> OzResult<()> {
     let listener = TcpListener::bind(&format!("0.0.0.0:{port}")).await?;
     log::info!("start listen on port {}", 7656);
     let queues = Arc::new(Mutex::new(MQueue::default()));
+    tokio::spawn(process_queues(Arc::clone(&queues)));
     loop {
         match listener.accept().await {
             Ok((stream, socket_address)) => {
@@ -32,6 +33,18 @@ pub async fn start_server(port: u16) -> OzResult<()> {
                 ));
             }
             Err(e) => log::error!("error on accept connection {}", e),
+        }
+    }
+}
+
+async fn process_queues(queues: Arc<Mutex<MQueue>>) {
+    loop {
+        let queues = queues.lock().await;
+        let keys = queues.get_keys().await;
+        for key in keys {
+            if let Some(queue) = queues.get(&key).await {
+                queue.process_message().await;
+            }
         }
     }
 }

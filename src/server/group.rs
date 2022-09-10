@@ -47,7 +47,7 @@ impl Group {
         self.connections.push(connection).await;
     }
 
-    pub async fn send_message(&mut self, message: Bytes) -> OzResult<()> {
+    pub async fn send_message(&mut self, message: &Bytes) -> OzResult<()> {
         loop {
             if self.connections.is_empty().await {
                 break;
@@ -77,7 +77,7 @@ impl Group {
                     Err(e) => {
                         log::error!(
                             "error on send message {} to currently connection {e}",
-                            String::from_utf8_lossy(&message)
+                            String::from_utf8_lossy(message)
                         );
                         self.pop_current_connection().await;
                         continue;
