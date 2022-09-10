@@ -66,10 +66,10 @@ impl MQueue {
         if let Some(inner) = self.queues.get(queue_name).await {
             let mut groups = inner.groups.write().await;
             if connection.ok_subscribed().await.is_ok() {
-                if let Some(group) = groups.iter_mut().find(|g| g.name() == group_name) {
+                if let Some(group) = groups.iter().find(|g| g.name() == group_name) {
                     group.push_connection(Arc::clone(&connection)).await;
                 } else {
-                    let mut group = Group::new(group_name.to_string());
+                    let group = Group::new(group_name.to_string());
                     group.push_connection(Arc::clone(&connection)).await;
                     groups.push(group);
                     log::debug!("finish to add consumer to existent group in queue {queue_name}");
@@ -88,7 +88,7 @@ impl MQueue {
         queue_name: &str,
     ) {
         log::info!("adding new group {group_name} to queue {queue_name}");
-        let mut group = Group::new(group_name.to_string());
+        let group = Group::new(group_name.to_string());
         log::info!("adding connection to new group {group_name}");
         group.push_connection(Arc::clone(&connection)).await;
         log::info!("adding group {group_name} to queue {queue_name}");
