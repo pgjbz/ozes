@@ -77,18 +77,21 @@ impl OzesConnection {
     }
 
     async fn read(&self) -> OzResult<Bytes> {
-        let mut buffer = vec![0; BUFFER_SIZE];
-
-        let size = loop {
+        loop {
             self.stream.readable().await?;
+            let mut buffer = vec![0; BUFFER_SIZE];
             match self.stream.try_read(&mut buffer) {
                 Ok(size) => {
                     if size == 0 {
                         log::info!("connection from {} is closed", self.socket_address());
                         return Err(OzesError::WithouConnection);
                     }
+                    if size > BUFFER_SIZE {
+                        return Err(OzesError::ToLongMessage);
+                    }
                     buffer.truncate(size);
-                    break size;
+                    let bytes = Bytes::copy_from_slice(&buffer[..]);
+                    break Ok(bytes);
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     continue;
@@ -102,11 +105,7 @@ impl OzesConnection {
                     return Err(error)?;
                 }
             }
-        };
-        if size > BUFFER_SIZE {
-            return Err(OzesError::ToLongMessage);
         }
-        Ok(Bytes::copy_from_slice(&buffer[0..size]))
     }
 
     pub async fn read_message(&self) -> OzResult<Bytes> {
