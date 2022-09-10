@@ -162,21 +162,21 @@ async fn process_commands(
             Command::Subscriber { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(
-                        b"you cannot subscribe to a queue when you are a publisher",
+                        b"cannot subscribe when is a publisher",
                     ))
                     .await?
             }
             Command::Publisher { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(
-                        b"you cannot change queue to publish message",
+                        b"cannot change queue when already is a publisher",
                     ))
                     .await?
             }
             Command::Ok => {
                 publisher
                     .send_error_message(Bytes::from_static(
-                        b"ok command is able only to subscribers when receive message",
+                        b"ok command is only able to subscribers when receive message",
                     ))
                     .await?
             }
