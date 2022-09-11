@@ -41,7 +41,7 @@ impl Display for TokenType {
             Self::Subscribe => "subscribe",
             Self::Message => "message",
             Self::Ok => "ok",
-            Self::Name => "any",
+            Self::Name => "name",
             Self::Eof => "eof",
             Self::Text => "text",
             Self::Semicolon => ";",
@@ -69,5 +69,20 @@ impl Token {
 
     pub fn value(&self) -> Option<Bytes> {
         self.value.clone()
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}: '{}']",
+            self.token_type,
+            if let Some(ref result) = self.value {
+                String::from_utf8_lossy(result)
+            } else {
+                String::from_utf8_lossy(b"empty value")
+            }
+        )
     }
 }

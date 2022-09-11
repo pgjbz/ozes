@@ -115,9 +115,10 @@ impl Parser {
             self.consume();
             return Ok(());
         }
+
         Err(ParseError::new(format!(
-            "expected {:?} but got {:?}",
-            token_type, next_tok_type
+            "expected {} but got {}",
+            token_type, self.next_tok
         )))
     }
 
