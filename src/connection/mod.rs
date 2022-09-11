@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use bytes::Bytes;
 use tokio::{
     net::TcpStream,
+    sync::RwLock,
     time::{self, Duration},
 };
 
@@ -11,9 +12,15 @@ use crate::{
     BUFFER_SIZE,
 };
 
+enum ConnectionType {
+    Publisher,
+    Consumer,
+}
+
 pub struct OzesConnection {
     stream: TcpStream,
     socket_address: SocketAddr,
+    ty: RwLock<ConnectionType>,
 }
 
 impl OzesConnection {
@@ -21,6 +28,7 @@ impl OzesConnection {
         Self {
             stream,
             socket_address,
+            ty: RwLock::new(ConnectionType::Consumer),
         }
     }
 
@@ -68,6 +76,7 @@ impl OzesConnection {
     }
 
     pub async fn ok_publisher(&self) -> OzResult<()> {
+        *self.ty.write().await = ConnectionType::Publisher;
         self.send_message(Bytes::from_static(b"ok publisher")).await
     }
 
@@ -108,14 +117,17 @@ impl OzesConnection {
     }
 
     pub async fn read_message(&self) -> OzResult<Bytes> {
-        let result = tokio::select! {
-            res = self.read() => {res?}
-            _ = time::sleep(Duration::from_millis(500)) => {
-                log::error!("write message time out");
-                return Err(OzesError::TimeOut);
+        if let ConnectionType::Publisher = *self.ty.read().await {
+            Ok(self.read().await?)
+        } else {
+            tokio::select! {
+                res = self.read() => {Ok(res?)}
+                _ = time::sleep(Duration::from_millis(500)) => {
+                    log::error!("write message time out");
+                    Err(OzesError::TimeOut)
+                }
             }
-        };
-        Ok(result)
+        }
     }
 
     pub fn socket_address(&self) -> &SocketAddr {
