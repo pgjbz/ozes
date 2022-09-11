@@ -66,7 +66,8 @@ impl Parser {
                 }
                 _ => {
                     return Err(ParseError::new(format!(
-                        "miss expression, expression cannot start with {current_token}, only start with 'message', 'publisher' or 'subscribe'",
+                        "miss expression, expression cannot start with '{}', only start with 'message', 'publisher' or 'subscribe'",
+                        if let Some(ref value) = self.current_tok.value() { String::from_utf8_lossy(value) } else { String::from_utf8_lossy(b"any") }
                     )))
                 }
             }
