@@ -52,18 +52,17 @@ impl OzesConnection {
         }
     }
 
-    pub async fn send_message(&self, message: Bytes) -> OzResult<()> {
+    pub async fn send_message(&self, message: Bytes) -> OzResult<usize> {
         tokio::select! {
-            res = self.send(message) => {let _ = res?;}
+            res = self.send(message) => {res},
             _ = time::sleep(Duration::from_millis(500)) => {
                 log::error!("write message time out");
-                return Err(OzesError::TimeOut);
+                Err(OzesError::TimeOut)
             }
         }
-        Ok(())
     }
 
-    pub async fn send_error_message(&self, message: Bytes) -> OzResult<()> {
+    pub async fn send_error_message(&self, message: Bytes) -> OzResult<usize> {
         let mut vec = Vec::with_capacity(message.len() + 8);
         vec.extend_from_slice(b"error \"");
         vec.extend_from_slice(&message);
@@ -72,17 +71,17 @@ impl OzesConnection {
         self.send_message(Bytes::copy_from_slice(&vec)).await
     }
 
-    pub async fn ok_subscribed(&self) -> OzResult<()> {
+    pub async fn ok_subscribed(&self) -> OzResult<usize> {
         self.send_message(Bytes::from_static(b"ok subscribed"))
             .await
     }
 
-    pub async fn ok_publisher(&self) -> OzResult<()> {
+    pub async fn ok_publisher(&self) -> OzResult<usize> {
         *self.ty.write().await = ConnectionType::Publisher;
         self.send_message(Bytes::from_static(b"ok publisher")).await
     }
 
-    pub async fn ok_message(&self) -> OzResult<()> {
+    pub async fn ok_message(&self) -> OzResult<usize> {
         self.send_message(Bytes::from_static(b"ok message")).await
     }
 

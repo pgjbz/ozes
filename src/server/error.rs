@@ -12,6 +12,7 @@ pub enum OzesError {
     ToLongMessage,
     AddrInUse,
     PermissionDenied,
+    InvalidLen(usize),
 }
 
 impl OzesError {
@@ -30,6 +31,7 @@ impl Display for OzesError {
             Self::AddrInUse => "address already in use".to_owned(),
             Self::PermissionDenied => "permission denied".to_owned(),
             Self::UnknownError(error) => format!("unknown error: {}", error),
+            Self::InvalidLen(len) => format!("invalid len {}", len),
         };
         write!(f, "{}", error)
     }

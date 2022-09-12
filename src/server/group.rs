@@ -54,9 +54,13 @@ impl Group {
             }
             if let Some(connection) = self.connections.get(self.actual_con()).await {
                 match connection.send_message(message.clone()).await {
-                    Ok(_) => match self.process_client_return(connection).await {
+                    Ok(len) => match self.process_client_return(connection, len).await {
                         Err(error) if error.is_error(OzesError::WithouConnection) => {
                             self.pop_current_connection().await;
+                            continue;
+                        }
+                        Err(error) if error.is_error(OzesError::InvalidLen(len)) => {
+                            log::info!("invalid len: {} retry", len);
                             continue;
                         }
                         Err(error) if error.is_error(OzesError::UnknownError(String::new())) => {
@@ -102,22 +106,36 @@ impl Group {
         *self.actual_con.lock().unwrap() += 1;
     }
 
-    async fn process_client_return(&self, connection: Arc<OzesConnection>) -> OzResult<()> {
+    async fn process_client_return(
+        &self,
+        connection: Arc<OzesConnection>,
+        msg_len: usize,
+    ) -> OzResult<()> {
         let msg = connection.read_message().await;
         if let Ok(msg) = msg {
             let commands = parser::parse(msg);
             match commands {
                 Ok(cmds) => {
-                    if cmds.len() != 1 {
-                        connection
-                            .send_error_message(Bytes::from_static(
-                                b"expected exactly one command\n",
-                            ))
-                            .await?;
-                    } else if !matches!(cmds[0], Command::Ok { .. }) {
-                        connection
-                            .send_error_message(Bytes::from_static(b"expected 'Ok' one command\n"))
-                            .await?
+                    match &cmds[..] {
+                        [Command::Ok { len }] => {
+                            if *len != msg_len {
+                                return Err(OzesError::InvalidLen(*len));
+                            }
+                        }
+                        [_] => {
+                            connection
+                                .send_error_message(Bytes::from_static(
+                                    b"expected 'Ok' one command\n",
+                                ))
+                                .await?;
+                        }
+                        _ => {
+                            connection
+                                .send_error_message(Bytes::from_static(
+                                    b"expected exactly one command\n",
+                                ))
+                                .await?;
+                        }
                     }
                     Ok(())
                 }
@@ -125,7 +143,8 @@ impl Group {
                     println!("parse error: {}", error);
                     connection
                         .send_error_message(Bytes::copy_from_slice(error.to_string().as_bytes()))
-                        .await
+                        .await?;
+                    Ok(())
                 }
             }
         } else {

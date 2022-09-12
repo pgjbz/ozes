@@ -134,7 +134,7 @@ async fn handle_publisher(
                 Err(error) => {
                     connection
                         .send_error_message(Bytes::copy_from_slice(error.to_string().as_bytes()))
-                        .await?
+                        .await?;
                 }
             }
         }
@@ -162,21 +162,21 @@ async fn process_commands(
             Command::Subscriber { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(b"cannot subscribe when is a publisher"))
-                    .await?
+                    .await?;
             }
             Command::Publisher { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(
                         b"cannot change queue when already is a publisher",
                     ))
-                    .await?
+                    .await?;
             }
             Command::Ok { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(
                         b"ok command is only able to subscribers when receive message",
                     ))
-                    .await?
+                    .await?;
             }
         }
     }
