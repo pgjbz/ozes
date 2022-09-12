@@ -19,7 +19,20 @@ impl Lexer {
         let start = self.idx;
         //TODO: lex len token
         match self.current_char() {
-            (b'l') => todo!("lex len token"),
+            b'l' => {
+                self.consume();
+                let start = self.idx;
+                self.skip_until(|c| c.is_ascii_digit() && c != &0u8);
+                let end = self.idx;
+                let number_slice = Bytes::copy_from_slice(&self.input[start..end]);
+
+                let number_string = String::from_utf8_lossy(&number_slice);
+                let number: usize = match number_string.parse() {
+                    Ok(number) => number,
+                    Err(_) => return Token::new(TokenType::Illegal, Some(number_slice)),
+                };
+                Token::new(TokenType::Len(number), None)
+            }
             (b'a'..=b'z') | (b'A'..=b'Z') | b'_' => {
                 self.skip_until(|c| {
                     (c.is_ascii_alphanumeric() || c == &b'_' || c == &b'.') && c != &0u8
