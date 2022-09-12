@@ -17,8 +17,9 @@ impl Lexer {
     pub fn next_token(&mut self) -> Token {
         self.skip_until(|c| c.is_ascii_whitespace() && c != &0u8);
         let start = self.idx;
-
+        //TODO: lex len token
         match self.current_char() {
+            (b'l') => todo!("lex len token"),
             (b'a'..=b'z') | (b'A'..=b'Z') | b'_' => {
                 self.skip_until(|c| {
                     (c.is_ascii_alphanumeric() || c == &b'_' || c == &b'.') && c != &0u8
@@ -96,6 +97,8 @@ mod tests {
             ("_ha.do_ken", TokenType::Name),
             ("4+8", TokenType::Illegal),
             ("#4+8", TokenType::Binary),
+            ("#4+8", TokenType::Binary),
+            ("l250", TokenType::Len(250)),
             ("", TokenType::Eof),
         ];
         for (input, expected) in cases {
@@ -115,7 +118,7 @@ mod tests {
         let input = Bytes::from_static(
             b"with foo _foo 
         publisher 
-        group ; 123 message _123 4+8 pgjbz.dev",
+        group ; 123 message _123 4+8 pgjbz.dev l250",
         );
         let expecteds = [
             TokenType::With,
@@ -129,6 +132,7 @@ mod tests {
             TokenType::Name,
             TokenType::Illegal,
             TokenType::Name,
+            TokenType::Len(250),
             TokenType::Eof,
         ];
         let mut lexer = Lexer::new(input);

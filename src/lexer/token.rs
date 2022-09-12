@@ -14,6 +14,7 @@ pub enum TokenType {
     Publisher,
     Subscribe,
     Semicolon,
+    Len(usize),
     Binary,
 }
 
@@ -34,17 +35,18 @@ impl From<&[u8]> for TokenType {
 impl Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
-            Self::With => "with",
-            Self::Group => "group",
-            Self::Publisher => "publisher",
-            Self::Subscribe => "subscribe",
-            Self::Message => "message",
-            Self::Ok => "ok",
-            Self::Name => "name",
-            Self::Eof => "eof",
-            Self::Semicolon => ";",
-            Self::Illegal => "illegal",
-            Self::Binary => "binary",
+            Self::With => "with".to_owned(),
+            Self::Group => "group".to_owned(),
+            Self::Publisher => "publisher".to_owned(),
+            Self::Subscribe => "subscribe".to_owned(),
+            Self::Message => "message".to_owned(),
+            Self::Ok => "ok".to_owned(),
+            Self::Name => "name".to_owned(),
+            Self::Eof => "eof".to_owned(),
+            Self::Semicolon => ";".to_owned(),
+            Self::Illegal => "illegal".to_owned(),
+            Self::Binary => "binary".to_owned(),
+            Self::Len(len) => format!("len {}", len),
         };
         write!(f, "{}", name)
     }
