@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use bytes::Bytes;
 
 use crate::{
-    connection::{OzesConnection, Connection},
+    connection::{Connection, OzesConnection},
     parser::{self, Command},
 };
 

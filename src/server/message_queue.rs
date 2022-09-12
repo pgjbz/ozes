@@ -41,11 +41,31 @@ impl InnerQueue {
 
     pub(crate) async fn process_message(&self) {
         if let Some(message) = self.get_message().await {
+            let final_message = self.make_final_message(message);
             let groups = self.groups.read().await;
             for group in groups.iter() {
-                let _ = group.send_message(&message).await;
+                let _ = group.send_message(&final_message).await;
             }
         }
+    }
+
+    #[inline(always)]
+    fn make_final_message(&self, message: Bytes) -> Bytes {
+        let message_len = message.len();
+        let len_string = Self::len_string_len(message_len);
+        const SIZE_INFO: usize = 4;
+        let final_size: usize = message_len + len_string + SIZE_INFO;
+        let mut final_message: Vec<u8> = Vec::with_capacity(final_size);
+        final_message.extend_from_slice(b"+l");
+        final_message.extend_from_slice(final_size.to_string().as_bytes());
+        final_message.extend_from_slice(b" #");
+        final_message.extend_from_slice(&message);
+        Bytes::copy_from_slice(&final_message)
+    }
+
+    #[inline(always)]
+    fn len_string_len(len: usize) -> usize {
+        len.to_string().len()
     }
 
     async fn push_message(&self, message: Bytes) {

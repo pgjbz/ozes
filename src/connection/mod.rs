@@ -18,8 +18,6 @@ enum ConnectionType {
     Consumer,
 }
 
-
-
 pub struct OzesConnection {
     stream: TcpStream,
     socket_address: SocketAddr,
@@ -95,7 +93,6 @@ impl OzesConnection {
         &self.stream
     }
 }
-
 
 #[async_trait]
 pub trait Connection {
