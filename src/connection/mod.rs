@@ -117,11 +117,9 @@ impl Connection for OzesConnection {
     }
 
     async fn send_error_message(&self, message: Bytes) -> OzResult<usize> {
-        let mut vec = Vec::with_capacity(message.len() + 8);
-        vec.extend_from_slice(b"error \"");
+        let mut vec = Vec::with_capacity(message.len() + 7);
+        vec.extend_from_slice(b"error #");
         vec.extend_from_slice(&message);
-        vec.push(b'"');
-
         self.send_message(Bytes::copy_from_slice(&vec)).await
     }
 
