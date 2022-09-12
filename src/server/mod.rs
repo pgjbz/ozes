@@ -86,7 +86,7 @@ async fn handle_connection(ozes_connection: OzesConnection, message_queue: Queue
                             ))
                             .await?;
                     }
-                    Command::Ok => {
+                    Command::Ok { .. } => {
                         connection
                             .send_error_message(Bytes::from_static(
                                 b"ok command is able only when client receive a message",
@@ -171,7 +171,7 @@ async fn process_commands(
                     ))
                     .await?
             }
-            Command::Ok => {
+            Command::Ok { .. } => {
                 publisher
                     .send_error_message(Bytes::from_static(
                         b"ok command is only able to subscribers when receive message",

@@ -18,7 +18,9 @@ pub enum Command {
         queue_name: Bytes,
         group_name: Bytes,
     },
-    Ok,
+    Ok {
+        len: usize,
+    },
 }
 
 struct Parser {
@@ -105,9 +107,14 @@ impl Parser {
 
     fn parse_ok(&mut self) -> Result<Command, ParseError> {
         self.expected_token(TokenType::Len(0))?;
+        let size = if let TokenType::Len(size) = self.current_tok.token_type() {
+            size
+        } else {
+            0
+        };
         self.expected_token(TokenType::Eof)?;
         self.consume();
-        Ok(Command::Ok)
+        Ok(Command::Ok { len: size })
     }
 
     fn expected_token(&mut self, token_type: TokenType) -> Result<(), ParseError> {
@@ -237,7 +244,7 @@ mod tests {
                     },
                 ],
             ),
-            ("ok +l400", vec![Command::Ok]),
+            ("ok +l400", vec![Command::Ok { len: 400 }]),
         ];
         for (input, expecteds) in cases {
             let mut parser = build_parser(input.into());

@@ -114,7 +114,7 @@ impl Group {
                                 b"expected exactly one command\n",
                             ))
                             .await?;
-                    } else if cmds[0] != Command::Ok {
+                    } else if !matches!(cmds[0], Command::Ok { .. }) {
                         connection
                             .send_error_message(Bytes::from_static(b"expected 'Ok' one command\n"))
                             .await?
