@@ -4,7 +4,7 @@ use bytes::Bytes;
 use tokio::net::TcpListener;
 
 use crate::{
-    connection::OzesConnection,
+    connection::{OzesConnection, Connection},
     parser::{self, Command},
     server::message_queue::MQueue,
 };

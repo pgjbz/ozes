@@ -6,6 +6,8 @@ use std::{
 use bytes::Bytes;
 use tokio::sync::RwLock;
 
+use crate::connection::Connection;
+
 use super::{group::Group, OzResult, OzesConnection};
 
 #[derive(Default)]
