@@ -30,17 +30,6 @@ impl Lexer {
 
                 Token::new(token_type, Some(Bytes::copy_from_slice(slice)))
             }
-            b'"' => {
-                self.consume();
-                let start = self.idx;
-                self.skip_until(|c| c != &b'"');
-                let end = self.idx;
-                self.consume();
-                Token::new(
-                    TokenType::Text,
-                    Some(Bytes::copy_from_slice(&self.input[start..end])),
-                )
-            }
             b';' => {
                 self.consume();
                 Token::new(TokenType::Semicolon, None)
@@ -97,7 +86,6 @@ mod tests {
             ("message", TokenType::Message),
             ("foo", TokenType::Name),
             ("_foo", TokenType::Name),
-            ("\"bar baz\"", TokenType::Text),
             ("publisher", TokenType::Publisher),
             ("subscribe", TokenType::Subscribe),
             ("group", TokenType::Group),
@@ -126,14 +114,13 @@ mod tests {
     fn given_sequence_should_be_tokenize_correctly() {
         let input = Bytes::from_static(
             b"with foo _foo 
-        \"bar baz\" publisher 
+        publisher 
         group ; 123 message _123 4+8 pgjbz.dev",
         );
         let expecteds = [
             TokenType::With,
             TokenType::Name,
             TokenType::Name,
-            TokenType::Text,
             TokenType::Publisher,
             TokenType::Group,
             TokenType::Semicolon,

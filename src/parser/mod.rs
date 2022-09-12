@@ -76,7 +76,7 @@ impl Parser {
     }
 
     fn parse_message(&mut self) -> Result<Command, ParseError> {
-        self.expected_token_in(&[TokenType::Text, TokenType::Binary])?;
+        self.expected_token_in(&[TokenType::Binary])?;
         let message = self.current_tok.value().unwrap();
         self.consume();
         Ok(Command::Message { message })
@@ -188,25 +188,13 @@ mod tests {
                 },
             ),
             (
-                "message \"baz\"",
-                Command::Message {
-                    message: "baz".into(),
-                },
-            ),
-            (
-                "message \"baz\";",
-                Command::Message {
-                    message: "baz".into(),
-                },
-            ),
-            (
                 "message #baz\";",
                 Command::Message {
                     message: "baz\";".into(),
                 },
             ),
-            // ("ok", Command::Ok),
-            // ("ok;", Command::Ok),
+            //("ok", Command::Ok),
+            //("ok;", Command::Ok),
         ];
         for (input, expected) in cases {
             let mut parser = build_parser(input.into());
@@ -238,23 +226,14 @@ mod tests {
                 }],
             ),
             (
-                "publisher foo; message \"baz\";",
+                "publisher foo; message #baz;",
                 vec![
                     Command::Publisher {
                         queue_name: "foo".into(),
                     },
                     Command::Message {
-                        message: "baz".into(),
+                        message: "baz;".into(),
                     },
-                ],
-            ),
-            (
-                "message \"baz\";ok;",
-                vec![
-                    Command::Message {
-                        message: "baz".into(),
-                    },
-                    Command::Ok,
                 ],
             ),
         ];
