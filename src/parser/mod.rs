@@ -104,6 +104,7 @@ impl Parser {
     }
 
     fn parse_ok(&mut self) -> Result<Command, ParseError> {
+        self.expected_token(TokenType::Len(0))?;
         self.expected_token(TokenType::Eof)?;
         self.consume();
         Ok(Command::Ok)
@@ -236,6 +237,7 @@ mod tests {
                     },
                 ],
             ),
+            ("ok +l400", vec![Command::Ok]),
         ];
         for (input, expecteds) in cases {
             let mut parser = build_parser(input.into());

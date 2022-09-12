@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use bytes::Bytes;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Eq, Clone, Copy, Debug)]
 pub enum TokenType {
     Ok,
     Eof,
@@ -16,6 +16,12 @@ pub enum TokenType {
     Semicolon,
     Len(usize),
     Binary,
+}
+
+impl PartialEq for TokenType {
+    fn eq(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
 }
 
 impl From<&[u8]> for TokenType {

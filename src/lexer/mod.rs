@@ -19,7 +19,8 @@ impl Lexer {
         let start = self.idx;
         //TODO: lex len token
         match self.current_char() {
-            b'l' => {
+            b'+' if self.next_char() == &b'l' => {
+                self.consume();
                 self.consume();
                 let start = self.idx;
                 self.skip_until(|c| c.is_ascii_digit() && c != &0u8);
@@ -83,6 +84,9 @@ impl Lexer {
         self.idx += 1;
     }
 
+    fn next_char(&self) -> &u8 {
+        self.input.get(self.idx + 1).unwrap_or(&0u8)
+    }
     fn current_char(&self) -> &u8 {
         self.input.get(self.idx).unwrap_or(&0u8)
     }
@@ -111,7 +115,9 @@ mod tests {
             ("4+8", TokenType::Illegal),
             ("#4+8", TokenType::Binary),
             ("#4+8", TokenType::Binary),
-            ("l250", TokenType::Len(250)),
+            ("+l250", TokenType::Len(250)),
+            ("la", TokenType::Name),
+            ("+la", TokenType::Illegal),
             ("", TokenType::Eof),
         ];
         for (input, expected) in cases {
@@ -131,7 +137,7 @@ mod tests {
         let input = Bytes::from_static(
             b"with foo _foo 
         publisher 
-        group ; 123 message _123 4+8 pgjbz.dev l250",
+        group ; 123 message _123 4+8 pgjbz.dev +l250 love",
         );
         let expecteds = [
             TokenType::With,
@@ -146,6 +152,7 @@ mod tests {
             TokenType::Illegal,
             TokenType::Name,
             TokenType::Len(250),
+            TokenType::Name,
             TokenType::Eof,
         ];
         let mut lexer = Lexer::new(input);
