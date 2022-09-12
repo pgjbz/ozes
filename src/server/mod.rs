@@ -190,8 +190,8 @@ async fn process_message_command(
     message_queue: Queues,
 ) -> OzResult<()> {
     log::info!(
-        "send {} to {} queue",
-        String::from_utf8_lossy(&message),
+        "send {} bytes to {} queue",
+        message.len(),
         String::from_utf8_lossy(&queue_name)
     );
     publisher.ok_message().await?;
