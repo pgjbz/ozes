@@ -13,7 +13,8 @@ Ozes is a message system... for learning purposes only
     - [X] Create consumer
     - [X] Create publisher
     - [X] Ok
-    - [ ] Error
+    - [X] Error
     - [ ] Create queue
     - [ ] Create group in queue
-- [ ] Support to send and receive binaries in messages.
+- [X] Support to send and receive binaries in messages.
+- [ ] Improve way to read messages from clients
