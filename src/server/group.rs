@@ -59,6 +59,7 @@ impl Group {
                         }
                         Err(error) if error.is_error(OzesError::InvalidLen(len)) => {
                             log::info!("invalid len: {} retry", len);
+                            self.next_connection();
                             continue;
                         }
                         Err(error) if error.is_error(OzesError::UnknownError(String::new())) => {
