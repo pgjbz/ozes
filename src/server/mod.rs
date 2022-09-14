@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use ozes_parser::parser::{self, Command};
 use tokio::net::TcpListener;
 
 use crate::{
     connection::{Connection, OzesConnection},
-    parser::{self, Command},
     server::message_queue::MQueue,
 };
 

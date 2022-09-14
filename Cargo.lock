@@ -201,7 +201,16 @@ dependencies = [
  "bytes",
  "fast_log",
  "log",
+ "ozes-parser",
  "tokio",
+]
+
+[[package]]
+name = "ozes-parser"
+version = "0.1.0"
+source = "git+https://github.com/pgjbz/ozes-parser.git#f3b321f16decc7712c6297c58986c1fb4b70364e"
+dependencies = [
+ "bytes",
 ]
 
 [[package]]

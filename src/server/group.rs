@@ -1,11 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
+use ozes_parser::parser::Command;
 
-use crate::{
-    connection::{Connection, OzesConnection},
-    parser::{self, Command},
-};
+use crate::connection::{Connection, OzesConnection};
 
 use super::{
     error::{OzResult, OzesError},
@@ -113,7 +111,7 @@ impl Group {
     ) -> OzResult<()> {
         let msg = connection.read_message().await;
         if let Ok(msg) = msg {
-            let commands = parser::parse(msg);
+            let commands = ozes_parser::parser::parse(msg);
             match commands {
                 Ok(cmds) => {
                     match &cmds[..] {
