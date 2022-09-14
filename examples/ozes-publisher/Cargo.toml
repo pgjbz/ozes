@@ -1,0 +1,13 @@
+[package]
+name = "ozes-publisher"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bincode = "1.3.3"
+serde = { version = "1.0.144", features = ["derive"] }
+
+ozes-connector = { version = "0.1.0", git = "https://github.com/pgjbz/ozes-connector.git", features = ["publisher"] }
+rand = "0.8.5"
