@@ -18,4 +18,4 @@ Ozes is a message system... for learning purposes only
     - [ ] Create group in queue
 - [X] Support to send and receive binaries in messages.
 - [ ] Improve way to read messages from clients
-- [ ] Add len to message send to Ozes like "message +l17 #foo" check in [parser](https://github.com/pgjbz/ozes-parser)
+- [X] Add len to message send to Ozes like "message +l17 #foo" check in [parser](https://github.com/pgjbz/ozes-parser)
