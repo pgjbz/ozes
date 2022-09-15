@@ -207,8 +207,8 @@ dependencies = [
 
 [[package]]
 name = "ozes-parser"
-version = "0.1.0"
-source = "git+https://github.com/pgjbz/ozes-parser.git#f3b321f16decc7712c6297c58986c1fb4b70364e"
+version = "0.1.2"
+source = "git+https://github.com/pgjbz/ozes-parser.git#aa6141244225334b1f0ae7d37b1bb8bbae822980"
 dependencies = [
  "bytes",
 ]

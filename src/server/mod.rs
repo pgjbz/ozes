@@ -7,9 +7,10 @@ use tokio::net::TcpListener;
 use crate::{
     connection::{Connection, OzesConnection},
     server::message_queue::MQueue,
+    BASE_MESSAGE_LEN,
 };
 
-use self::error::OzResult;
+use self::error::{OzResult, OzesError};
 
 pub(crate) mod error;
 mod group;
@@ -129,7 +130,6 @@ async fn handle_publisher(
                         Arc::clone(&message_queue),
                     )
                     .await?;
-                    continue;
                 }
                 Err(error) => {
                     connection
@@ -150,7 +150,19 @@ async fn process_commands(
 ) -> OzResult<()> {
     for command in commands {
         match command {
-            Command::Message { message } => {
+            Command::Message { message, len } => {
+                let message_len = message.len();
+                let message_len_size = crate::number_len(message_len);
+                let total_len = message_len + message_len_size + BASE_MESSAGE_LEN;
+                log::error!(
+                    "error on process message {:?} invalid len[{}] is provided",
+                    message,
+                    len
+                );
+                if total_len != len {
+                    Err(OzesError::InvalidLen(total_len))?
+                }
+
                 process_message_command(
                     message,
                     queue_name.clone(),
