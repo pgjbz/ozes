@@ -11,7 +11,7 @@ log = "0.4"
 fast_log = "1.5" 
 bytes = "1.2.1"
 async-trait = "0.1.57"
-ozes-parser ={ version = "0.1.2", git = "https://github.com/pgjbz/ozes-parser.git" }
+ozes-parser ={ version = "0.1.3", git = "https://github.com/pgjbz/ozes-parser.git" }
 [profile.release]
 opt-level = 3
 debug = 0

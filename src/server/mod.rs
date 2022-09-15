@@ -94,6 +94,13 @@ async fn handle_connection(ozes_connection: OzesConnection, message_queue: Queue
                             ))
                             .await?;
                     }
+                    Command::Error { .. } => {
+                        connection
+                            .send_error_message(Bytes::from_static(
+                                b"cannot send error on first message",
+                            ))
+                            .await?;
+                    }
                 }
             }
         }
@@ -154,12 +161,13 @@ async fn process_commands(
                 let message_len = message.len();
                 let message_len_size = crate::number_len(message_len);
                 let total_len = message_len + message_len_size + BASE_MESSAGE_LEN;
-                log::error!(
-                    "error on process message {:?} invalid len[{}] is provided",
-                    message,
-                    len
-                );
+
                 if total_len != len {
+                    log::error!(
+                        "error on process message {:?} invalid len[{}] is provided",
+                        message,
+                        len
+                    );
                     Err(OzesError::InvalidLen(total_len))?
                 }
 
@@ -190,6 +198,11 @@ async fn process_commands(
                     ))
                     .await?;
             }
+            Command::Error { message } => Err(OzesError::UnknownError(format!(
+                "error with connection {} dropping with message {:?}",
+                publisher.socket_address(),
+                message
+            )))?,
         }
     }
     Ok(())
